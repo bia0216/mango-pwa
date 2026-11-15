@@ -123,6 +123,19 @@
   }
 
   function renderResult(r) {
+    if (r.label === "not a mango") {               // sent by the Colab cell with the mango check
+      el.verdictLabel.textContent = "Not a mango";
+      el.verdictLabel.style.color = "var(--danger)";
+      el.verdictLabel.style.textTransform = "none";
+      el.verdictConf.textContent = "";
+      el.verdictText.textContent = "This photo doesn't look like a mango, so no ripeness is given. Take a close photo of one mango.";
+      el.lowConf.hidden = true;
+      el.bars.innerHTML = "";
+      el.resultCard.hidden = false;
+      el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+    el.verdictLabel.style.textTransform = "";
     const conf = {};
     for (const c of r.confidences) conf[c.label] = c.confidence;
     const top = r.label;
