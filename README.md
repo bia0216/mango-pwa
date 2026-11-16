@@ -1,6 +1,6 @@
 # Mango Ripeness PWA (Week 1 prototype)
 
-Installable web app (laptop + phone): take a photo with the camera or upload one, and get unripe / ripe / overripe with confidence.
+Installable web app (laptop + phone): take a photo with the camera or upload one, and get unripe / ripe / overripe with confidence. **Live mode** (camera → "Start live") predicts on the camera feed about once a second and shows the result over the video.
 
 **How it works:** the app is only the front end. The photo is sent to the Gradio app from notebook cell J (running in Colab), which runs `mango_ripeness_v1.keras`. No model file is in this folder. Running the model inside the browser (TensorFlow.js / ONNX) is a Month 1 task; the export from Keras 3.13 is still untested.
 

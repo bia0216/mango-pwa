@@ -21,6 +21,7 @@
     settings: $("settings"), settingsBtn: $("settingsBtn"), serverInput: $("serverInput"), saveServerBtn: $("saveServerBtn"),
     settingsMsg: $("settingsMsg"), phoneBox: $("phoneBox"), qr: $("qr"), phoneLink: $("phoneLink"),
     installBtn: $("installBtn"), canvas: $("canvas"),
+    liveBtn: $("liveBtn"), liveTag: $("liveTag"), liveText: $("liveText"),
   };
 
   // ---------- model server (the Gradio app from notebook cell J) ----------
@@ -122,7 +123,7 @@
     showError("");
   }
 
-  function renderResult(r) {
+  function renderResult(r, scroll = true) {
     if (r.label === "not a mango") {               // sent by the Colab cell with the mango check
       el.verdictLabel.textContent = "Not a mango";
       el.verdictLabel.style.color = "var(--danger)";
@@ -132,7 +133,7 @@
       el.lowConf.hidden = true;
       el.bars.innerHTML = "";
       el.resultCard.hidden = false;
-      el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (scroll) el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
       return;
     }
     el.verdictLabel.style.textTransform = "";
@@ -162,7 +163,7 @@
       requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = (v * 100).toFixed(1) + "%"; }));
     }
     el.resultCard.hidden = false;
-    el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (scroll) el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   // ---------- images ----------
@@ -265,6 +266,7 @@
   }
 
   function stopCamera() {
+    stopLive();
     if (stream) stream.getTracks().forEach((t) => t.stop());
     stream = null;
     el.video.srcObject = null;
@@ -285,12 +287,83 @@
     handleImage(blob);
   }
 
+  // ---------- live mode: predict on camera frames continuously ----------
+  let liveOn = false;
+  const LIVE_SIDE = 640;          // frames are downscaled before upload to keep it fast
+  const LIVE_PAUSE_MS = 400;      // pause between predictions (one request at a time)
+
+  function frameBlob() {
+    const v = el.video;
+    if (!v.videoWidth) return Promise.resolve(null);
+    const s = Math.min(1, LIVE_SIDE / Math.max(v.videoWidth, v.videoHeight));
+    const c = document.createElement("canvas");
+    c.width = Math.round(v.videoWidth * s);
+    c.height = Math.round(v.videoHeight * s);
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    return new Promise((resolve) => c.toBlob(resolve, "image/jpeg", 0.85));
+  }
+
+  function showLive(r) {
+    if (r.label === "not a mango") {
+      el.liveTag.dataset.cls = "none";
+      el.liveText.textContent = "Not a mango";
+    } else {
+      const c = r.confidences.find((x) => x.label === r.label);
+      const pct = c ? Math.round(c.confidence * 100) : 0;
+      el.liveTag.dataset.cls = r.label;
+      el.liveText.textContent = r.label.charAt(0).toUpperCase() + r.label.slice(1) + " · " + pct + "%";
+    }
+    renderResult(r, false);
+  }
+
+  async function liveLoop() {
+    while (liveOn && stream) {
+      const blob = await frameBlob();
+      if (blob) {
+        try {
+          const r = await predict(blob);
+          if (!liveOn) break;
+          showLive(r);
+          setPill("ok", "Model online · " + new URL(server).host);
+        } catch (e) {
+          stopLive();
+          showError("Live mode stopped: can't reach the model server. Is the Colab cell still running? Paste its new link in Settings if it changed.");
+          setPill("bad", "Model server offline (tap to change link)");
+          break;
+        }
+      }
+      await new Promise((res) => setTimeout(res, LIVE_PAUSE_MS));
+    }
+  }
+
+  function startLive() {
+    if (!server) { openSettings("Add the model server link first, then start live mode."); return; }
+    showError("");
+    liveOn = true;
+    el.liveBtn.textContent = "Stop live";
+    el.liveBtn.classList.add("live-on");
+    delete el.liveTag.dataset.cls;
+    el.liveText.textContent = "Live · analysing…";
+    el.liveTag.hidden = false;
+    liveLoop();
+  }
+
+  function stopLive() {
+    liveOn = false;
+    el.liveBtn.textContent = "Start live";
+    el.liveBtn.classList.remove("live-on");
+    el.liveTag.hidden = true;
+  }
+
+  el.liveBtn.addEventListener("click", () => (liveOn ? stopLive() : startLive()));
   el.cameraBtn.addEventListener("click", openCamera);
   el.snapBtn.addEventListener("click", snap);
   el.flipBtn.addEventListener("click", async () => {
+    const wasLive = liveOn;
     facing = facing === "environment" ? "user" : "environment";
     stopCamera();
     await openCamera();
+    if (wasLive && stream) startLive();
   });
   el.closeCamBtn.addEventListener("click", resetView);
   el.againBtn.addEventListener("click", () => { resetView(); window.scrollTo({ top: 0, behavior: "smooth" }); });

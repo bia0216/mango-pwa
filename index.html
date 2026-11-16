@@ -45,6 +45,7 @@
         <video id="video" playsinline muted hidden></video>
         <img id="preview" alt="Selected mango photo" hidden>
         <div id="busy" class="busy" hidden><div class="spinner"></div><span>Analysing…</span></div>
+        <div id="liveTag" class="live-tag" hidden aria-live="polite"><span class="live-dot"></span><span id="liveText">Live · starting…</span></div>
       </div>
 
       <div id="mainControls" class="controls">
@@ -60,7 +61,8 @@
       </div>
 
       <div id="cameraControls" class="controls" hidden>
-        <button id="snapBtn" class="btn primary">Capture</button>
+        <button id="liveBtn" class="btn primary">Start live</button>
+        <button id="snapBtn" class="btn secondary">Capture</button>
         <button id="flipBtn" class="btn secondary" hidden>Switch camera</button>
         <button id="closeCamBtn" class="btn ghost">Cancel</button>
       </div>

@@ -91,6 +91,18 @@ main { max-width: 720px; margin: 0 auto; padding: 0 16px 24px; display: grid; ga
   background: rgba(255, 248, 231, .75); color: #3A2400; font-weight: 600;
 }
 @media (prefers-color-scheme: dark) { .busy { background: rgba(26, 22, 16, .75); color: var(--text); } }
+.live-tag {
+  position: absolute; left: 12px; top: 12px; display: flex; align-items: center; gap: 10px;
+  background: rgba(30, 22, 12, .82); color: #FFF8E7; border-radius: 999px; padding: 8px 16px;
+  font-weight: 700; font-size: 1.1rem; max-width: calc(100% - 24px);
+}
+.live-tag .live-dot { width: 12px; height: 12px; border-radius: 50%; background: #E53935; flex-shrink: 0; animation: blink 1.2s ease-in-out infinite; }
+.live-tag[data-cls="unripe"] .live-dot { background: var(--unripe); animation: none; }
+.live-tag[data-cls="ripe"] .live-dot { background: var(--ripe); animation: none; }
+.live-tag[data-cls="overripe"] .live-dot { background: var(--overripe); animation: none; }
+.live-tag[data-cls="none"] .live-dot { background: #9E9E9E; animation: none; }
+@keyframes blink { 50% { opacity: .3; } }
+.btn.primary.live-on { background: #C62828; color: #fff; }
 .spinner {
   width: 44px; height: 44px; border-radius: 50%;
   border: 5px solid rgba(245, 166, 35, .3); border-top-color: var(--accent);
