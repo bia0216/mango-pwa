@@ -35,6 +35,11 @@
       <span class="dot"></span><span id="serverText">No model server set</span>
     </button>
 
+    <label id="modelRow" class="model-row" for="modelSelect" hidden>
+      <span>Model</span>
+      <select id="modelSelect"></select>
+    </label>
+
     <section class="card">
       <div id="stage" class="stage">
         <div id="placeholder" class="placeholder">
@@ -77,6 +82,7 @@
         <span id="verdictConf" class="verdict-conf"></span>
       </div>
       <p id="verdictText" class="muted"></p>
+      <p id="modelUsed" class="muted small-text" hidden></p>
       <p id="lowConf" class="warn" hidden>Low confidence. Check the photo: one mango, good light, mango fills most of the frame.</p>
       <div id="bars" class="bars"></div>
       <button id="againBtn" class="btn secondary wide">Try another photo</button>
@@ -86,7 +92,7 @@
       <h2>Good to know</h2>
       <ul>
         <li>Made for the <strong>long yellow mango</strong>, one mango per photo.</li>
-        <li>Photos that don't look like a mango are rejected first. For mangoes, the model picks one of three classes (unripe, ripe, overripe); it cannot detect disease or rot.</li>
+        <li>Photos that don't look like a mango are rejected first (pretrained CLIP check; look-alikes like papaya can pass). For mangoes, the model picks one of three classes (unripe, ripe, overripe); it cannot detect disease or rot.</li>
         <li>Prediction runs on the project's model server, so an internet connection is needed.</li>
       </ul>
     </section>

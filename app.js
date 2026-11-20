@@ -22,6 +22,7 @@
     settingsMsg: $("settingsMsg"), phoneBox: $("phoneBox"), qr: $("qr"), phoneLink: $("phoneLink"),
     installBtn: $("installBtn"), canvas: $("canvas"),
     liveBtn: $("liveBtn"), liveTag: $("liveTag"), liveText: $("liveText"),
+    modelRow: $("modelRow"), modelSelect: $("modelSelect"), modelUsed: $("modelUsed"),
   };
 
   // ---------- model server (the Gradio app from notebook cell J) ----------
@@ -65,6 +66,9 @@
     try {
       const r = await timedFetch(server + "/config", { cache: "no-store" }, 10000);
       if (!r.ok) throw new Error(String(r.status));
+      let cfg = null;
+      try { cfg = await r.json(); } catch (_) { /* old server: no model list */ }
+      setupModels(cfg);
       setPill("ok", "Model online · " + new URL(server).host);
       return true;
     } catch (_) {
@@ -72,6 +76,38 @@
       return false;
     }
   }
+
+  // ---------- model selector (shown only when the server offers a "Model" dropdown, e.g. the comparison notebook) ----------
+  const MODEL_KEY = "mango.model";
+  let modelChoices = [];          // values the server accepts, e.g. ["MobileNetV2", "EfficientNetV2-B0", "YOLO26n-cls"]
+
+  function setupModels(cfg) {
+    const comp = cfg && Array.isArray(cfg.components)
+      ? cfg.components.find((c) => c.type === "dropdown") : null;
+    const raw = comp && comp.props && Array.isArray(comp.props.choices) ? comp.props.choices : [];
+    // Gradio lists choices as ["Label", "value"] pairs (newer) or plain strings (older)
+    const choices = raw.map((ch) => Array.isArray(ch) ? { label: String(ch[0]), value: String(ch[1] ?? ch[0]) }
+                                                      : { label: String(ch), value: String(ch) });
+    modelChoices = choices.map((c) => c.value);
+    el.modelSelect.innerHTML = "";
+    for (const c of choices) {
+      const o = document.createElement("option");
+      o.value = c.value;
+      o.textContent = c.label;
+      el.modelSelect.appendChild(o);
+    }
+    let saved = "";
+    try { saved = localStorage.getItem(MODEL_KEY) || ""; } catch (_) { /* ignore */ }
+    if (modelChoices.includes(saved)) el.modelSelect.value = saved;
+    el.modelRow.hidden = modelChoices.length === 0;
+  }
+
+  el.modelSelect.addEventListener("change", () => {
+    try { localStorage.setItem(MODEL_KEY, el.modelSelect.value); } catch (_) { /* ignore */ }
+    el.resultCard.hidden = true;     // an old result belongs to the previous model
+  });
+
+  function currentModel() { return modelChoices.length ? el.modelSelect.value : ""; }
 
   async function predict(blob) {
     const fd = new FormData();
@@ -83,7 +119,9 @@
     const call = await timedFetch(server + "/gradio_api/call/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: [{ path: paths[0], meta: { _type: "gradio.FileData" } }] }),
+      body: JSON.stringify({ data: modelChoices.length
+        ? [{ path: paths[0], meta: { _type: "gradio.FileData" } }, currentModel()]   // photo + chosen model
+        : [{ path: paths[0], meta: { _type: "gradio.FileData" } }] }),               // older one-model server
     }, 30000);
     if (!call.ok) throw new Error("The model server refused the request (" + call.status + ").");
     const { event_id } = await call.json();
@@ -124,7 +162,9 @@
   }
 
   function renderResult(r, scroll = true) {
-    if (r.label === "not a mango") {               // sent by the Colab cell with the mango check
+    el.modelUsed.textContent = currentModel() ? "Model: " + currentModel() : "";
+    el.modelUsed.hidden = !currentModel();
+    if (!(r.label in CLASS_INFO)) {                // "not a mango", or any answer that is not a ripeness class
       el.verdictLabel.textContent = "Not a mango";
       el.verdictLabel.style.color = "var(--danger)";
       el.verdictLabel.style.textTransform = "none";
@@ -304,7 +344,7 @@
   }
 
   function showLive(r) {
-    if (r.label === "not a mango") {
+    if (!(r.label in CLASS_INFO)) {
       el.liveTag.dataset.cls = "none";
       el.liveText.textContent = "Not a mango";
     } else {
