@@ -259,6 +259,7 @@
     try {
       const r = await predict(jpeg);
       renderResult(r);
+      addScan(r);                                    // saved on this device for the Overview tab
       setPill("ok", "Model online · " + new URL(server).host);
     } catch (e) {
       const offline = e.name === "AbortError" || e instanceof TypeError;
@@ -406,7 +407,7 @@
     if (wasLive && stream) startLive();
   });
   el.closeCamBtn.addEventListener("click", resetView);
-  el.againBtn.addEventListener("click", () => { resetView(); window.scrollTo({ top: 0, behavior: "smooth" }); });
+  el.againBtn.addEventListener("click", () => { resetView(); el.stage.scrollIntoView({ behavior: "smooth", block: "center" }); });
 
   el.fileInput.addEventListener("change", () => {
     const f = el.fileInput.files && el.fileInput.files[0];
@@ -507,5 +508,115 @@
     window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
   }
 
+  // ---------- scan history (kept only in this browser; feeds the Overview tab) ----------
+  const HIST_KEY = "mango.history";
+  const COLORS = { unripe: "#5BC27A", ripe: "#F2B42C", overripe: "#C9733A", "not a mango": "#9FB3A5" };
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+
+  function loadScans() {
+    try { return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch (_) { return []; }
+  }
+  function saveScans(s) {
+    try { localStorage.setItem(HIST_KEY, JSON.stringify(s.slice(-200))); } catch (_) { /* storage blocked */ }
+  }
+  function addScan(r) {
+    const known = r.label in CLASS_INFO;
+    const c = known ? (r.confidences.find((x) => x.label === r.label) || {}).confidence : null;
+    const s = loadScans();
+    s.push({ t: Date.now(), label: known ? r.label : "not a mango", conf: c ?? null, model: currentModel() });
+    saveScans(s);
+  }
+  function ago(t) {
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return m + " min ago";
+    const h = Math.round(m / 60);
+    return h < 24 ? h + " h ago" : Math.round(h / 24) + " d ago";
+  }
+
+  function renderOverview() {
+    const s = loadScans();
+    const last = s[s.length - 1];
+    $("lastLabel").textContent = last ? cap(last.label) + (last.conf != null ? " · " + Math.round(last.conf * 100) + "%" : "") : "No scans yet";
+    $("lastLabel").style.color = last ? COLORS[last.label] : "";
+    $("lastMeta").textContent = last ? (last.model ? last.model + " · " : "") + ago(last.t) : "Scan a mango to see it here.";
+
+    // donut: your scans by result
+    const keys = Object.keys(COLORS);
+    const counts = keys.map((k) => s.filter((x) => x.label === k).length);
+    const total = counts.reduce((a, b) => a + b, 0);
+    const C = 2 * Math.PI * 60;
+    let off = 0;
+    let svg = '<g transform="rotate(-90 75 75)" fill="none" stroke-width="16"><circle cx="75" cy="75" r="60" stroke="rgba(255,255,255,.08)"/>';
+    keys.forEach((k, i) => {
+      if (!counts[i]) return;
+      const len = counts[i] / total * C;
+      svg += `<circle cx="75" cy="75" r="60" stroke="${COLORS[k]}" stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
+      off += len;
+    });
+    svg += `</g><text x="75" y="76" text-anchor="middle" fill="#EAF1EC" font-family="Space Grotesk, sans-serif" font-size="28" font-weight="700">${total}</text>`
+         + '<text x="75" y="96" text-anchor="middle" fill="#9FB3A5" font-family="Inter, sans-serif" font-size="11">scans</text>';
+    $("donut").innerHTML = svg;
+    $("donutLegend").innerHTML = keys.map((k, i) => `<li><i style="background:${COLORS[k]}"></i>${cap(k)} <b>${counts[i]}</b></li>`).join("");
+
+    // bars: scans per day, last 7 days
+    const days = [];
+    for (let d = 6; d >= 0; d--) {
+      const day = new Date();
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() - d);
+      days.push(day.getTime());
+    }
+    const per = days.map((d0) => s.filter((x) => x.t >= d0 && x.t < d0 + 864e5).length);
+    const max = Math.max(1, ...per);
+    $("weekBars").innerHTML = days.map((d0, i) =>
+      `<div class="day"><span>${per[i] || ""}</span><div class="bar${i === 6 ? " today" : ""}" style="height:${Math.round(per[i] / max * 72)}%"></div>`
+      + `<span>${new Date(d0).toLocaleDateString(undefined, { weekday: "short" })}</span></div>`).join("");
+
+    // recent scans
+    const rec = s.slice(-5).reverse();
+    $("recentList").innerHTML = rec.length
+      ? rec.map((x) => `<li><span style="color:${COLORS[x.label]}">${cap(x.label)}</span><span class="meta">`
+          + `${x.conf != null ? Math.round(x.conf * 100) + "% · " : ""}${x.model ? esc(x.model) + " · " : ""}${ago(x.t)}</span></li>`).join("")
+      : '<li><span class="muted">No scans yet</span></li>';
+  }
+
+  $("clearHistory").addEventListener("click", () => {
+    if (confirm("Clear the scan history on this device?")) { saveScans([]); renderOverview(); }
+  });
+
+  // ---------- tabs: Overview · Ripeness · Disease · Insights (sidebar on laptop, bottom bar on phone) ----------
+  const TABS = ["overview", "ripeness", "disease", "insights"];
+  function showTab(name, updateHash = true) {
+    if (!TABS.includes(name)) name = "overview";
+    document.querySelectorAll(".view").forEach((v) => { v.hidden = v.dataset.view !== name; });
+    document.querySelectorAll("[data-tab]").forEach((b) => {
+      const on = b.dataset.tab === name;
+      b.classList.toggle("active", on);
+      if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    });
+    if (name !== "ripeness" && stream) {           // leaving the scan tab turns the camera off
+      stopCamera();
+      el.mainControls.hidden = false;
+      el.cameraControls.hidden = true;
+      if (el.preview.hidden) el.placeholder.hidden = false;
+    }
+    if (name === "overview") renderOverview();
+    if (updateHash && location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+    window.scrollTo({ top: 0 });
+  }
+  document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  window.addEventListener("hashchange", () => showTab(location.hash.slice(1), false));
+
+  // Overview quick actions jump to the scan tab
+  document.querySelectorAll("[data-quick]").forEach((b) => b.addEventListener("click", async () => {
+    showTab("ripeness");
+    if (b.dataset.quick === "upload") { el.fileInput.click(); return; }
+    await openCamera();
+    if (b.dataset.quick === "live" && stream) startLive();
+  }));
+
+  showTab(location.hash.slice(1) || "overview", false);
   checkServer();
 })();

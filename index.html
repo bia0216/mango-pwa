@@ -3,123 +3,276 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Mango Ripeness</title>
+  <title>Mango Grader</title>
   <meta name="description" content="Take or upload a photo of one mango and get its ripeness: unripe, ripe or overripe.">
-  <meta name="theme-color" content="#F5A623">
+  <meta name="theme-color" content="#0B140F">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Mango">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="top">
-    <div class="brand">
-      <img src="icons/icon.svg" alt="" width="40" height="40">
-      <div>
-        <h1>Mango Ripeness</h1>
-        <p>Week 1 prototype · transfer learning (MobileNetV2)</p>
-      </div>
-    </div>
-    <div class="top-actions">
-      <button id="installBtn" class="btn ghost small" hidden>Install app</button>
-      <button id="settingsBtn" class="btn ghost small icon-only" aria-label="Settings" title="Settings">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1l.4 2.5h4l.4-2.5c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
-      </button>
-    </div>
-  </header>
-
-  <main>
-    <button id="serverPill" class="pill" type="button">
-      <span class="dot"></span><span id="serverText">No model server set</span>
-    </button>
-
-    <label id="modelRow" class="model-row" for="modelSelect" hidden>
-      <span>Model</span>
-      <select id="modelSelect"></select>
-    </label>
-
-    <section class="card">
-      <div id="stage" class="stage">
-        <div id="placeholder" class="placeholder">
-          <img src="icons/icon.svg" alt="" width="72" height="72">
-          <p><strong>One mango per photo</strong></p>
-          <p class="muted">Take a photo, upload one, or drop / paste an image here.</p>
+  <div class="app">
+    <header class="top">
+      <div class="brand">
+        <img src="icons/icon.svg" alt="" width="38" height="38">
+        <div>
+          <h1>Mango Grader</h1>
+          <p>Ripeness classification · transfer learning</p>
         </div>
-        <video id="video" playsinline muted hidden></video>
-        <img id="preview" alt="Selected mango photo" hidden>
-        <div id="busy" class="busy" hidden><div class="spinner"></div><span>Analysing…</span></div>
-        <div id="liveTag" class="live-tag" hidden aria-live="polite"><span class="live-dot"></span><span id="liveText">Live · starting…</span></div>
       </div>
-
-      <div id="mainControls" class="controls">
-        <button id="cameraBtn" class="btn primary">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9Zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg>
-          Take photo
+      <div class="top-actions">
+        <button id="serverPill" class="pill" type="button">
+          <span class="dot"></span><span id="serverText">No model server set</span>
         </button>
-        <label class="btn secondary" for="fileInput">
-          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M11 16V7.8l-3.3 3.3-1.4-1.4L12 4l5.7 5.7-1.4 1.4L13 7.8V16h-2Zm-6 4v-5h2v3h10v-3h2v5H5Z"/></svg>
-          Upload photo
-        </label>
-        <input id="fileInput" type="file" accept="image/*" hidden>
+        <button id="installBtn" class="btn ghost small" hidden>Install app</button>
+        <button id="settingsBtn" class="btn ghost small icon-only" aria-label="Settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        </button>
       </div>
+    </header>
 
-      <div id="cameraControls" class="controls" hidden>
-        <button id="liveBtn" class="btn primary">Start live</button>
-        <button id="snapBtn" class="btn secondary">Capture</button>
-        <button id="flipBtn" class="btn secondary" hidden>Switch camera</button>
-        <button id="closeCamBtn" class="btn ghost">Cancel</button>
-      </div>
-    </section>
+    <div class="layout">
+      <nav class="side glass" aria-label="Main">
+        <button class="nav" data-tab="overview"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</button>
+        <button class="nav" data-tab="ripeness"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21c-4.5 0-7-3.2-7-7.2C5 8.6 9 4 13.8 4 18 4 20 7 20 10.6 20 16 16.6 21 12 21Z"/><path d="M14 4c.3-1.2 1.3-2 2.6-2"/></svg>Ripeness</button>
+        <button class="nav" data-tab="disease"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/><path d="M12 8v5M12 16h.01"/></svg>Disease<span class="chip">Month 1</span></button>
+        <button class="nav" data-tab="insights"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</button>
+      </nav>
 
-    <div id="error" class="error" role="alert" hidden></div>
+      <main>
+        <!-- ===== OVERVIEW ===== -->
+        <section class="view" data-view="overview" aria-label="Overview">
+          <div class="view-head">
+            <p class="eyebrow">Overview</p>
+            <h2>Ready to grade</h2>
+          </div>
+          <div class="grid3">
+            <section class="card hero">
+              <h3>Scan a mango</h3>
+              <p class="muted">One mango per photo. The model returns unripe, ripe or overripe, or "not a mango".</p>
+              <div class="row">
+                <button class="btn primary" data-quick="camera">Take photo</button>
+                <button class="btn secondary" data-quick="upload">Upload</button>
+                <button class="btn secondary" data-quick="live"><span class="rec"></span>Live</button>
+              </div>
+            </section>
+            <section class="card">
+              <p class="eyebrow">Last scan</p>
+              <p id="lastLabel" class="big">No scans yet</p>
+              <p id="lastMeta" class="muted small-text">Scan a mango to see it here.</p>
+            </section>
+            <section class="card">
+              <p class="eyebrow">Baseline model</p>
+              <p class="h3like">MobileNetV2 · v1</p>
+              <div class="row stats">
+                <div><span class="big">91.7%</span><span class="muted small-text">test accuracy</span></div>
+                <div><span class="big">0.898</span><span class="muted small-text">macro-F1</span></div>
+              </div>
+              <p class="muted small-text">On 1,943 held-out test images</p>
+            </section>
+          </div>
+          <div class="grid3">
+            <section class="card">
+              <h3>Your scans</h3>
+              <div class="donut-row">
+                <svg id="donut" viewBox="0 0 150 150" width="140" height="140" role="img" aria-label="Your scans by result"></svg>
+                <ul id="donutLegend" class="legend"></ul>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Scans in the last 7 days</h3>
+              <div id="weekBars" class="week"></div>
+            </section>
+            <section class="card">
+              <div class="card-head"><h3>Recent scans</h3><button id="clearHistory" class="link-btn" type="button">Clear</button></div>
+              <ul id="recentList" class="recent"></ul>
+              <p class="muted small-text">Saved only on this device.</p>
+            </section>
+          </div>
+        </section>
 
-    <section id="resultCard" class="card result" hidden aria-live="polite">
-      <p class="eyebrow">Predicted ripeness</p>
-      <div class="verdict">
-        <span id="verdictLabel" class="verdict-label">–</span>
-        <span id="verdictConf" class="verdict-conf"></span>
-      </div>
-      <p id="verdictText" class="muted"></p>
-      <p id="modelUsed" class="muted small-text" hidden></p>
-      <p id="lowConf" class="warn" hidden>Low confidence. Check the photo: one mango, good light, mango fills most of the frame.</p>
-      <div id="bars" class="bars"></div>
-      <button id="againBtn" class="btn secondary wide">Try another photo</button>
-    </section>
+        <!-- ===== RIPENESS ===== -->
+        <section class="view" data-view="ripeness" aria-label="Ripeness scan">
+          <div class="scan-layout">
+            <section class="card scan">
+              <div class="card-head"><h2 class="title">Ripeness scan</h2>
+                <label id="modelRow" class="model-row" for="modelSelect" hidden>
+                  <span>Model</span>
+                  <select id="modelSelect"></select>
+                </label>
+              </div>
+              <div id="stage" class="stage">
+                <div id="placeholder" class="placeholder">
+                  <img src="icons/icon.svg" alt="" width="64" height="64">
+                  <p><strong>One mango per photo</strong></p>
+                  <p class="muted">Take a photo, upload one, or drop / paste an image here.</p>
+                </div>
+                <video id="video" playsinline muted hidden></video>
+                <img id="preview" alt="Selected mango photo" hidden>
+                <div id="frame" class="frame" aria-hidden="true"></div>
+                <div id="busy" class="busy" hidden><div class="spinner"></div><span>Analysing…</span></div>
+                <div id="liveTag" class="live-tag" hidden aria-live="polite"><span class="live-dot"></span><span id="liveText">Live · starting…</span></div>
+              </div>
+              <div id="mainControls" class="controls">
+                <button id="cameraBtn" class="btn primary">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                  Take photo
+                </button>
+                <label class="btn secondary" for="fileInput">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+                  Upload photo
+                </label>
+                <input id="fileInput" type="file" accept="image/*" hidden>
+              </div>
+              <div id="cameraControls" class="controls" hidden>
+                <button id="liveBtn" class="btn primary">Start live</button>
+                <button id="snapBtn" class="btn secondary">Capture</button>
+                <button id="flipBtn" class="btn secondary" hidden>Switch camera</button>
+                <button id="closeCamBtn" class="btn ghost">Cancel</button>
+              </div>
+              <div id="error" class="error" role="alert" hidden></div>
+            </section>
 
-    <section class="card notes">
-      <h2>Good to know</h2>
-      <ul>
-        <li>Made for the <strong>long yellow mango</strong>, one mango per photo.</li>
-        <li>Photos that don't look like a mango are rejected first (pretrained CLIP check; look-alikes like papaya can pass). For mangoes, the model picks one of three classes (unripe, ripe, overripe); it cannot detect disease or rot.</li>
-        <li>Prediction runs on the project's model server, so an internet connection is needed.</li>
-      </ul>
-    </section>
-  </main>
+            <aside class="scan-side">
+              <section id="resultCard" class="card result" hidden aria-live="polite">
+                <p class="eyebrow">Predicted ripeness</p>
+                <div class="verdict">
+                  <span id="verdictLabel" class="verdict-label">–</span>
+                  <span id="verdictConf" class="verdict-conf"></span>
+                </div>
+                <p id="verdictText" class="muted"></p>
+                <p id="modelUsed" class="muted small-text" hidden></p>
+                <p id="lowConf" class="warn" hidden>Low confidence. Check the photo: one mango, good light, mango fills most of the frame.</p>
+                <div id="bars" class="bars"></div>
+                <button id="againBtn" class="btn secondary wide">Try another photo</button>
+              </section>
+              <section class="card notes">
+                <h3>Good to know</h3>
+                <ul>
+                  <li>Made for the <strong>long yellow mango</strong>, one mango per photo.</li>
+                  <li>Photos that don't look like a mango should be answered with "Not a mango". Look-alike fruit can still pass.</li>
+                  <li>It cannot detect disease or rot yet (Month 1).</li>
+                  <li>Prediction runs on the project's model server, so an internet connection is needed.</li>
+                </ul>
+              </section>
+            </aside>
+          </div>
+        </section>
 
-  <footer>
-    Data: Roboflow “mango-fruit-ripeness” (school-vakkx, CC BY 4.0) and “dataset-s2doa” (emm-tnn, Public Domain).
-  </footer>
+        <!-- ===== DISEASE (preview) ===== -->
+        <section class="view" data-view="disease" aria-label="Disease (Month 1 preview)">
+          <div class="banner">Design preview: disease detection, Grad-CAM and quality grading are planned for Month 1. Values on this screen are examples.</div>
+          <div class="scan-layout">
+            <section class="card scan">
+              <div class="card-head"><h2 class="title">Disease check</h2><span class="chip">Example</span></div>
+              <div class="stage disease-stage">
+                <svg viewBox="0 0 512 512" width="300" height="300" class="d-mango" aria-hidden="true"><path d="M150 380 C 100 280, 160 140, 290 115 C 385 98, 430 175, 402 258 C 375 345, 250 450, 150 380 Z" fill="#E9B43A"/><path d="M296 118 C 318 74, 370 58, 414 72 C 388 114, 344 130, 296 118 Z" fill="#4C9A2A"/><circle cx="250" cy="300" r="26" fill="#3A2412"/><circle cx="292" cy="262" r="15" fill="#3A2412"/><circle cx="215" cy="335" r="11" fill="#3A2412"/></svg>
+                <div class="heat" aria-hidden="true"></div>
+                <span class="stage-note">Grad-CAM: where the model looked</span>
+              </div>
+            </section>
+            <aside class="scan-side">
+              <section class="card">
+                <div class="card-head"><p class="eyebrow">Disease</p><span class="chip">Example</span></div>
+                <p class="big" style="color: var(--danger)">Anthracnose</p>
+                <div class="bars">
+                  <div class="bar-row"><span class="name">Healthy</span><div class="bar-track"><div class="bar-fill" style="width:18%;background:var(--unripe)"></div></div><span class="val">18%</span></div>
+                  <div class="bar-row"><span class="name">Anthracnose</span><div class="bar-track"><div class="bar-fill" style="width:74%;background:var(--danger)"></div></div><span class="val">74%</span></div>
+                  <div class="bar-row"><span class="name">Other</span><div class="bar-track"><div class="bar-fill" style="width:8%;background:var(--muted)"></div></div><span class="val">8%</span></div>
+                </div>
+              </section>
+              <section class="card grade">
+                <span class="grade-badge">C</span>
+                <div>
+                  <p class="h3like">Quality grade (example)</p>
+                  <p class="muted small-text">Ripe + Anthracnose. The grading rule combining ripeness and disease is defined in Month 1.</p>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </section>
+
+        <!-- ===== INSIGHTS ===== -->
+        <section class="view" data-view="insights" aria-label="Insights">
+          <div class="view-head">
+            <p class="eyebrow">Insights</p>
+            <h2>How well the model grades</h2>
+          </div>
+          <div class="grid4">
+            <section class="card kpi"><span class="big accent">91.7%</span><span class="muted small-text">Test accuracy (1,782 of 1,943)</span></section>
+            <section class="card kpi"><span class="big">0.898</span><span class="muted small-text">Macro-F1 (3 classes)</span></section>
+            <section class="card kpi"><span class="big">15,111</span><span class="muted small-text">Mango images in the dataset</span></section>
+            <section class="card kpi"><span class="big">4,934</span><span class="muted small-text">Photos hand-labeled by the team</span></section>
+          </div>
+          <div class="grid2">
+            <section class="card">
+              <div class="card-head"><h3>Confusion matrix · test set</h3><span class="chip">MobileNetV2 v1</span></div>
+              <div class="cm">
+                <span></span><span class="cm-h">Pred. unripe</span><span class="cm-h">Pred. ripe</span><span class="cm-h">Pred. overripe</span>
+                <span class="cm-r">Unripe</span><span class="cell good-u">1,137</span><span class="cell">28</span><span class="cell dim">0</span>
+                <span class="cm-r">Ripe</span><span class="cell bad">91</span><span class="cell good-r">482</span><span class="cell">21</span>
+                <span class="cm-r">Overripe</span><span class="cell dim">1</span><span class="cell">20</span><span class="cell good-o">163</span>
+              </div>
+              <p class="muted small-text">Rows = true class, columns = prediction. Main error: 91 of 594 ripe mangoes predicted unripe.</p>
+            </section>
+            <section class="card">
+              <h3>F1-score per class</h3>
+              <div class="bars">
+                <div class="bar-row"><span class="name">Unripe</span><div class="bar-track"><div class="bar-fill" style="width:95%;background:var(--unripe)"></div></div><span class="val">0.950</span></div>
+                <div class="bar-row"><span class="name">Ripe</span><div class="bar-track"><div class="bar-fill" style="width:85.8%;background:var(--ripe)"></div></div><span class="val">0.858</span></div>
+                <div class="bar-row"><span class="name">Overripe</span><div class="bar-track"><div class="bar-fill" style="width:88.6%;background:var(--overripe)"></div></div><span class="val">0.886</span></div>
+              </div>
+              <p class="muted small-text">Verified by re-running the saved model on the test images listed in our data manifest.</p>
+            </section>
+          </div>
+          <section class="card">
+            <div class="card-head"><h3>Model comparison · 4 classes incl. "not a mango"</h3><span class="chip">Same data · 2,807 test images</span></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Model</th><th>Macro-F1 (95% interval)</th><th>Mango-only F1</th><th>Not-a-mango F1</th><th>Size</th><th>Speed (T4)</th></tr></thead>
+                <tbody>
+                  <tr><td><b>MobileNetV2</b><br><span class="muted small-text">TensorFlow / Keras</span></td><td>0.934 (0.921–0.946)</td><td>0.913</td><td>0.997</td><td>21.9 MB</td><td>174 ms</td></tr>
+                  <tr><td><b>EfficientNetV2-B0</b><br><span class="muted small-text">TensorFlow / Keras</span></td><td>0.926 (0.912–0.939)</td><td>0.902</td><td>0.996</td><td>34.0 MB</td><td>387 ms</td></tr>
+                  <tr><td><b>YOLO26n-cls</b><br><span class="muted small-text">Ultralytics / PyTorch</span></td><td>0.938 (0.925–0.950)</td><td>0.918</td><td>0.998</td><td>3.2 MB</td><td>10 ms</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="muted small-text">The 95% intervals overlap, so no model is clearly more accurate; YOLO26n-cls is the smallest and fastest. The "not a mango" test images are easy (backgrounds and white-background fruit photos), so real-world photos may score lower. Speed = time per image including file loading, one image at a time.</p>
+          </section>
+          <p class="credits">Data: Roboflow “mango-fruit-ripeness” (school-vakkx, CC BY 4.0) and “dataset-s2doa” (emm-tnn, Public Domain). Non-mango fruit: Fruits-360 (Mihai Oltean, CC BY-SA 4.0).</p>
+        </section>
+      </main>
+    </div>
+
+    <nav class="tabbar" aria-label="Main (mobile)">
+      <button class="tab" data-tab="overview"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</button>
+      <button class="tab" data-tab="ripeness"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21c-4.5 0-7-3.2-7-7.2C5 8.6 9 4 13.8 4 18 4 20 7 20 10.6 20 16 16.6 21 12 21Z"/></svg>Ripeness</button>
+      <button class="tab" data-tab="disease"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/></svg>Disease</button>
+      <button class="tab" data-tab="insights"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</button>
+    </nav>
+  </div>
 
   <dialog id="settings">
     <form method="dialog" class="dialog-body">
       <h2>Model server</h2>
-      <p class="muted">Paste the public link printed by cell J in Colab (looks like <code>https://xxxx.gradio.live</code>). It changes every time cell J runs.</p>
-      <input id="serverInput" type="url" inputmode="url" placeholder="https://xxxx.gradio.live" autocomplete="off" spellcheck="false">
+      <p class="muted">Paste the public link printed by the Colab server cell (looks like <code>https://xxxx.gradio.live</code>). It changes every time the cell runs.</p>
+      <input id="serverInput" type="url" inputmode="url" placeholder="https://xxxx.gradio.live" autocomplete="off" spellcheck="false" aria-label="Model server link">
       <div class="row">
         <button id="saveServerBtn" class="btn primary" value="save">Save &amp; test</button>
         <button class="btn ghost" value="cancel">Close</button>
       </div>
       <p id="settingsMsg" class="muted small-text"></p>
-
       <div id="phoneBox" class="phone-box" hidden>
         <h3>Open on your phone</h3>
         <p class="muted small-text">Scan to open this app on a phone with the same model server already set.</p>
         <div id="qr" class="qr"></div>
         <p class="muted small-text"><a id="phoneLink" href="#" target="_blank" rel="noopener">Phone link</a></p>
       </div>
-
       <p class="muted small-text">Install: on Android/Chrome use “Install app” or the browser menu → “Add to Home screen”. On iPhone: Share → “Add to Home Screen”.</p>
     </form>
   </dialog>

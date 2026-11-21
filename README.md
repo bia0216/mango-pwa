@@ -1,4 +1,6 @@
-# Mango Ripeness PWA (Week 1 prototype)
+# Mango Grader PWA
+
+Tabs: **Overview** (your scans, saved only on this device) · **Ripeness** (camera, upload, live mode, model selector) · **Disease** (Month 1 design preview) · **Insights** (verified v1 results and model comparison). Sidebar on laptop, bottom tab bar on phone.
 
 Installable web app (laptop + phone): take a photo with the camera or upload one, and get unripe / ripe / overripe with confidence. **Live mode** (camera → "Start live") predicts on the camera feed about once a second and shows the result over the video.
 
