@@ -169,6 +169,7 @@
   }
 
   function showGradeLink(g) {
+    if (!el.gradeLink) return;
     const st = GRADE_STYLE[g.grade] || { badge: "", cls: "" };
     el.gradeLink.className = "grade-link " + st.cls;
     el.gradeLink.textContent = "";
@@ -178,8 +179,8 @@
     el.gradeLink.hidden = false;
   }
 
-  async function checkDisease(label, photoUrl) {
-    el.gradeLink.hidden = true;
+  async function checkDisease(label, photoUrl, scanId) {
+    if (el.gradeLink) el.gradeLink.hidden = true;
     if (!lastUploadPath) return;
     d.empty.hidden = true; d.result.hidden = true;
     diseaseMessage("Checking for disease…");
@@ -193,6 +194,7 @@
       return;
     }
     showGradeLink(g);
+    if (scanId) updateScan(scanId, { grade: g.grade, disease: g.disease || null, dconf: g.disease ? g.conf : null });
     d.msg.hidden = true;
     const st = GRADE_STYLE[g.grade] || { badge: "", cls: "" };
     d.badge.textContent = st.badge;
@@ -237,7 +239,7 @@
     d.result.hidden = false;
   }
 
-  d.toggle.addEventListener("click", () => {
+  if (d.toggle) d.toggle.addEventListener("click", () => {   // guarded: an older cached index.html has no Disease tab
     const showCam = d.cam.hidden;
     d.cam.hidden = !showCam; d.photo.hidden = showCam;
     d.toggle.textContent = showCam ? "Show photo" : "Show heat map";
@@ -303,8 +305,8 @@
   }
 
   function renderResult(r, scroll = true) {
-    el.aiDesc.hidden = true;                         // an old description belongs to the previous photo
-    el.gradeLink.hidden = true;
+    if (el.aiDesc) el.aiDesc.hidden = true;          // an old description belongs to the previous photo
+    if (el.gradeLink) el.gradeLink.hidden = true;
     el.modelUsed.textContent = currentModel() ? "Model: " + currentModel() : "";
     el.modelUsed.hidden = !currentModel();
     if (!(r.label in CLASS_INFO)) {                // "not a mango", or any answer that is not a ripeness class
@@ -401,11 +403,16 @@
     el.cameraBtn.disabled = true;
     try {
       const r = await predict(jpeg);
-      renderResult(r);
-      addScan(r);                                    // saved on this device for the Overview tab
       setPill("ok", "Model online · " + new URL(server).host);
-      const lbl = r.label in CLASS_INFO ? r.label : "not a mango";
-      checkDisease(lbl, el.preview.src).finally(() => describe(lbl));   // not awaited: the ripeness shows at once
+      try {                                          // a display problem must not look like "server offline"
+        renderResult(r);
+        const scanId = addScan(r);                   // saved on this device for the Overview tab
+        const lbl = r.label in CLASS_INFO ? r.label : "not a mango";
+        if (d.empty) checkDisease(lbl, el.preview.src, scanId).catch(() => {}).finally(() => describe(lbl));   // not awaited
+      } catch (uiErr) {
+        showError("The model answered (" + r.label + "), but the app could not show it: " + uiErr.message +
+                  ". Reload the page; if it stays, upload ALL files from mango-pwa.zip again.");
+      }
     } catch (e) {
       const offline = e.name === "AbortError" || e instanceof TypeError;
       showError(offline
@@ -665,12 +672,39 @@
   function saveScans(s) {
     try { localStorage.setItem(HIST_KEY, JSON.stringify(s.slice(-200))); } catch (_) { /* storage blocked */ }
   }
+  // batches: a sorter starts a batch, scans its mangoes, then downloads a report
+  const BATCH_KEY = "mango.batch";
+  function currentBatch() {
+    let b = null;
+    try { b = JSON.parse(localStorage.getItem(BATCH_KEY) || "null"); } catch (_) { /* ignore */ }
+    if (!b || !b.id) {
+      b = { id: 1, started: Date.now() };
+      try { localStorage.setItem(BATCH_KEY, JSON.stringify(b)); } catch (_) { /* ignore */ }
+    }
+    return b;
+  }
+  function newBatch() {
+    const b = { id: currentBatch().id + 1, started: Date.now() };
+    try { localStorage.setItem(BATCH_KEY, JSON.stringify(b)); } catch (_) { /* ignore */ }
+    return b;
+  }
+
   function addScan(r) {
     const known = r.label in CLASS_INFO;
     const c = known ? (r.confidences.find((x) => x.label === r.label) || {}).confidence : null;
     const s = loadScans();
-    s.push({ t: Date.now(), label: known ? r.label : "not a mango", conf: c ?? null, model: currentModel() });
+    const t = Date.now();
+    s.push({ t, label: known ? r.label : "not a mango", conf: c ?? null, model: currentModel(), batch: currentBatch().id });
     saveScans(s);
+    return t;                                        // id of this scan, used to add the disease result later
+  }
+  function updateScan(t, patch) {
+    const s = loadScans();
+    const x = s.find((y) => y.t === t);
+    if (!x) return;
+    Object.assign(x, patch);
+    saveScans(s);
+    renderOverview();
   }
   function ago(t) {
     const m = Math.round((Date.now() - t) / 60000);
@@ -680,16 +714,61 @@
     return h < 24 ? h + " h ago" : Math.round(h / 24) + " d ago";
   }
 
+  const GRADE_COLORS = { "Grade A": "#5BC27A", "Grade B": "#F2B42C", "Reject": "#FF8A6B", "Check by hand": "#C9D6CC",
+                         "No grade": "#6F8576", "Not graded": "rgba(255,255,255,.22)" };
+  let donutMode = "grade";
+  const gradeOf = (x) => x.grade || "Not graded";     // older scans and scans without a disease server have no grade
+  function gradeBadge(g) {
+    const st = GRADE_STYLE[g];
+    return st ? `<b class="mini-badge ${st.cls}" title="${esc(g)}">${st.badge}</b>` : "";
+  }
+
+  function renderBatch(s) {
+    const b = currentBatch();
+    const mine = s.filter((x) => x.batch === b.id);
+    $("batchName").textContent = "Batch " + b.id;
+    $("batchCount").textContent = mine.length + (mine.length === 1 ? " mango" : " mangoes");
+    const parts = ["Grade A", "Grade B", "Reject", "Check by hand"].map((g) => [g, mine.filter((x) => x.grade === g).length]).filter(([, n]) => n);
+    $("batchGrades").textContent = "Started " + new Date(b.started).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+      + (parts.length ? " · " + parts.map(([g, n]) => g.replace("Grade ", "") + " " + n).join(" · ") : "");
+    $("reportBtn").disabled = !mine.length;
+  }
+
+  function csvCell(v) {
+    const t = v == null ? "" : String(v);
+    return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+  function downloadReport() {
+    const b = currentBatch();
+    const mine = loadScans().filter((x) => x.batch === b.id);
+    if (!mine.length) return;
+    const head = ["batch", "time", "ripeness", "ripeness_confidence", "disease", "disease_confidence", "grade", "model"];
+    const rows = mine.map((x) => [b.id, new Date(x.t).toLocaleString(), x.label, x.conf != null ? x.conf.toFixed(3) : "",
+      x.disease || "", x.dconf != null ? x.dconf.toFixed(3) : "", x.grade || "Not graded", x.model || ""]);
+    const csv = [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mango-batch-${b.id}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   function renderOverview() {
     const s = loadScans();
     const last = s[s.length - 1];
     $("lastLabel").textContent = last ? cap(last.label) + (last.conf != null ? " · " + Math.round(last.conf * 100) + "%" : "") : "No scans yet";
     $("lastLabel").style.color = last ? COLORS[last.label] : "";
-    $("lastMeta").textContent = last ? (last.model ? last.model + " · " : "") + ago(last.t) : "Scan a mango to see it here.";
+    $("lastMeta").textContent = last ? (last.grade ? last.grade + " · " : "") + (last.model ? last.model + " · " : "") + ago(last.t) : "Scan a mango to see it here.";
+    renderBatch(s);
 
-    // donut: your scans by result
-    const keys = Object.keys(COLORS);
-    const counts = keys.map((k) => s.filter((x) => x.label === k).length);
+    // donut: your scans by grade (default) or by ripeness
+    const colors = donutMode === "grade" ? GRADE_COLORS : COLORS;
+    const keyOf = donutMode === "grade" ? gradeOf : (x) => x.label;
+    const keys = Object.keys(colors).filter((k) => k !== "Not graded" || s.some((x) => !x.grade));
+    const counts = keys.map((k) => s.filter((x) => keyOf(x) === k).length);
     const total = counts.reduce((a, b) => a + b, 0);
     const C = 2 * Math.PI * 60;
     let off = 0;
@@ -697,13 +776,13 @@
     keys.forEach((k, i) => {
       if (!counts[i]) return;
       const len = counts[i] / total * C;
-      svg += `<circle cx="75" cy="75" r="60" stroke="${COLORS[k]}" stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
+      svg += `<circle cx="75" cy="75" r="60" stroke="${colors[k]}" stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
       off += len;
     });
     svg += `</g><text x="75" y="76" text-anchor="middle" fill="#EAF1EC" font-family="Space Grotesk, sans-serif" font-size="28" font-weight="700">${total}</text>`
          + '<text x="75" y="96" text-anchor="middle" fill="#9FB3A5" font-family="Inter, sans-serif" font-size="11">scans</text>';
     $("donut").innerHTML = svg;
-    $("donutLegend").innerHTML = keys.map((k, i) => `<li><i style="background:${COLORS[k]}"></i>${cap(k)} <b>${counts[i]}</b></li>`).join("");
+    $("donutLegend").innerHTML = keys.map((k, i) => `<li><i style="background:${colors[k]}"></i>${cap(k)} <b>${counts[i]}</b></li>`).join("");
 
     // bars: scans per day, last 7 days
     const days = [];
@@ -722,10 +801,30 @@
     // recent scans
     const rec = s.slice(-5).reverse();
     $("recentList").innerHTML = rec.length
-      ? rec.map((x) => `<li><span style="color:${COLORS[x.label]}">${cap(x.label)}</span><span class="meta">`
+      ? rec.map((x) => `<li><span class="rec-main">${gradeBadge(x.grade)}<span style="color:${COLORS[x.label]}">${cap(x.label)}</span></span><span class="meta">`
           + `${x.conf != null ? Math.round(x.conf * 100) + "% · " : ""}${x.model ? esc(x.model) + " · " : ""}${ago(x.t)}</span></li>`).join("")
       : '<li><span class="muted">No scans yet</span></li>';
   }
+
+  function setDonutMode(m) {
+    donutMode = m;
+    $("segGrade").classList.toggle("on", m === "grade");
+    $("segRipe").classList.toggle("on", m !== "grade");
+    $("segGrade").setAttribute("aria-pressed", String(m === "grade"));
+    $("segRipe").setAttribute("aria-pressed", String(m !== "grade"));
+    renderOverview();
+  }
+  $("segGrade").addEventListener("click", () => setDonutMode("grade"));
+  $("segRipe").addEventListener("click", () => setDonutMode("ripeness"));
+  $("reportBtn").addEventListener("click", downloadReport);
+  $("newBatchBtn").addEventListener("click", () => {
+    const n = loadScans().filter((x) => x.batch === currentBatch().id).length;
+    if (n && !confirm(`Start a new batch? Batch ${currentBatch().id} (${n} mangoes) stays in the history; download its report first if you need it.`)) return;
+    const b = newBatch();
+    $("batchMsg").textContent = "Batch " + b.id + " started. New scans are counted here.";
+    $("batchMsg").hidden = false;
+    renderOverview();
+  });
 
   $("clearHistory").addEventListener("click", () => {
     if (confirm("Clear the scan history on this device?")) { saveScans([]); renderOverview(); }

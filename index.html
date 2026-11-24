@@ -51,10 +51,16 @@
             <p class="eyebrow">Overview</p>
             <h2>Ready to grade</h2>
           </div>
+          <ol class="flow" aria-label="How it works">
+            <li><button type="button" data-goto="ripeness"><b>1</b><span><strong>Scan</strong><small>Photo, upload or live</small></span></button></li>
+            <li><button type="button" data-goto="ripeness"><b>2</b><span><strong>Ripeness</strong><small>Unripe · ripe · overripe</small></span></button></li>
+            <li><button type="button" data-goto="disease"><b>3</b><span><strong>Disease</strong><small>+ Grad-CAM: why</small></span></button></li>
+            <li><button type="button" data-goto="disease"><b>4</b><span><strong>Grade</strong><small>A · B · Reject · Check</small></span></button></li>
+          </ol>
           <div class="grid3">
             <section class="card hero">
               <h3>Scan a mango</h3>
-              <p class="muted">One mango per photo. The model returns unripe, ripe or overripe, or "not a mango".</p>
+              <p class="muted">One mango per photo. You get its ripeness, a disease check and a quality grade, or "not a mango".</p>
               <div class="row">
                 <button class="btn primary" data-quick="camera">Take photo</button>
                 <button class="btn secondary" data-quick="upload">Upload</button>
@@ -66,19 +72,25 @@
               <p id="lastLabel" class="big">No scans yet</p>
               <p id="lastMeta" class="muted small-text">Scan a mango to see it here.</p>
             </section>
-            <section class="card">
-              <p class="eyebrow">Baseline model</p>
-              <p class="h3like">MobileNetV2 · v1</p>
-              <div class="row stats">
-                <div><span class="big">91.7%</span><span class="muted small-text">test accuracy</span></div>
-                <div><span class="big">0.898</span><span class="muted small-text">macro-F1</span></div>
+            <section class="card batch">
+              <div class="card-head"><p class="eyebrow">Current batch</p><span id="batchName" class="chip"></span></div>
+              <p id="batchCount" class="big">0 mangoes</p>
+              <p id="batchGrades" class="muted small-text"></p>
+              <div class="row">
+                <button id="reportBtn" class="btn secondary" type="button">Download report (CSV)</button>
+                <button id="newBatchBtn" class="btn ghost" type="button">New batch</button>
               </div>
-              <p class="muted small-text">On 1,943 held-out test images</p>
+              <p id="batchMsg" class="muted small-text" hidden></p>
             </section>
           </div>
           <div class="grid3">
             <section class="card">
-              <h3>Your scans</h3>
+              <div class="card-head"><h3>Your scans</h3>
+                <div class="seg" role="group" aria-label="Show scans by">
+                  <button id="segGrade" type="button" class="on" aria-pressed="true">Grade</button>
+                  <button id="segRipe" type="button" aria-pressed="false">Ripeness</button>
+                </div>
+              </div>
               <div class="donut-row">
                 <svg id="donut" viewBox="0 0 150 150" width="140" height="140" role="img" aria-label="Your scans by result"></svg>
                 <ul id="donutLegend" class="legend"></ul>

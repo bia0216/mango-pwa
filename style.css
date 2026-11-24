@@ -134,6 +134,33 @@ main { flex: 1; min-width: 0; }
 .recent li { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(255, 255, 255, .07); font-size: 14px; }
 .recent li:last-child { border-bottom: 0; }
 .recent .meta { color: var(--muted); text-align: right; }
+.rec-main { display: flex; align-items: center; gap: 8px; }
+.mini-badge { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; font-size: 12px;
+  background: rgba(255, 255, 255, .08); color: var(--soft); }
+.mini-badge.g-a { color: var(--unripe); background: rgba(91, 194, 122, .16); }
+.mini-badge.g-b { color: var(--ripe); background: rgba(242, 180, 44, .16); }
+.mini-badge.g-x { color: var(--danger); background: rgba(255, 138, 107, .16); }
+
+/* how it works: the user journey from the story map */
+.flow { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.flow button { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; color: var(--text);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; font: inherit; position: relative; }
+.flow button:hover { border-color: rgba(245, 166, 35, .55); }
+.flow button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.flow b { flex-shrink: 0; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px;
+  background: rgba(245, 166, 35, .16); color: var(--accent-text); font-weight: 700; }
+.flow span { display: flex; flex-direction: column; min-width: 0; }
+.flow strong { font-size: 15px; }
+.flow small { color: var(--muted); font-size: 12px; }
+.flow li:not(:last-child) button::after { content: "›"; position: absolute; right: -9px; top: 50%; transform: translateY(-50%);
+  color: var(--muted); font-size: 18px; z-index: 1; }
+
+/* segmented switch (grade / ripeness) */
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .06); border: 1px solid var(--line); }
+.seg button { border: 0; background: transparent; color: var(--muted); font: 600 12px Inter, sans-serif; padding: 5px 10px; border-radius: 999px;
+  cursor: pointer; min-height: 28px; }
+.seg button.on { background: rgba(245, 166, 35, .2); color: var(--accent-text); }
+.batch .row .btn { flex: 1 1 140px; min-height: 40px; padding: 8px 12px; font-size: 14px; }
 
 /* ripeness scan */
 .scan-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
@@ -269,4 +296,7 @@ a { color: var(--accent-text); }
   .card { padding: 18px; }
   .bar-row { grid-template-columns: 82px 1fr 50px; }
   .big { font-size: 28px; }
+  .flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .flow li:nth-child(2) button::after { content: none; }
+  .flow button { padding: 10px; gap: 10px; }
 }
