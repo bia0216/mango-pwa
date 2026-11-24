@@ -177,6 +177,10 @@ main { flex: 1; min-width: 0; }
 .verdict { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .verdict-label { font-size: 40px; font-weight: 700; text-transform: capitalize; line-height: 1.1; }
 .verdict-conf { font-size: 18px; font-weight: 600; color: var(--soft); }
+.ai-desc { border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 10px; padding: 10px 12px; background: rgba(245, 166, 35, .06); }
+.ai-desc[hidden] { display: none; }
+.ai-tag { display: block; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.ai-desc p { margin: 0; white-space: pre-line; font-size: 14px; line-height: 1.5; }
 .warn { margin: 0; background: rgba(242, 180, 44, .10); border-left: 4px solid var(--ripe); padding: 8px 12px; border-radius: 8px; font-size: 13px; }
 .bars { display: grid; gap: 10px; }
 .bar-row { display: grid; grid-template-columns: 96px 1fr 56px; align-items: center; gap: 10px; font-size: 14px; }
@@ -197,6 +201,19 @@ main { flex: 1; min-width: 0; }
 .grade { flex-direction: row; align-items: center; gap: 16px; }
 .grade-badge { width: 68px; height: 68px; flex-shrink: 0; border-radius: 18px; display: grid; place-items: center; font-size: 32px; font-weight: 700;
   color: var(--danger); background: rgba(255, 138, 107, .16); border: 1px solid rgba(255, 138, 107, .5); }
+.grade-badge.g-a { color: var(--unripe); background: rgba(91, 194, 122, .16); border-color: rgba(91, 194, 122, .55); }
+.grade-badge.g-b { color: var(--ripe); background: rgba(242, 180, 44, .14); border-color: rgba(242, 180, 44, .55); }
+.grade-badge.g-q, .grade-badge.g-n { color: var(--soft); background: rgba(255, 255, 255, .06); border-color: var(--line); }
+.disease-stage > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.d-empty { align-items: flex-start; }
+.d-label { text-transform: none; font-size: 32px; }
+.d-bars .bar-row { grid-template-columns: minmax(96px, 150px) 1fr 56px; }
+.d-bars .bar-row .name { text-transform: none; }
+.chip-btn { border: 1px solid var(--line); cursor: pointer; font-family: inherit; min-height: 28px; }
+.grade-link { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer; font: 600 14px Inter, sans-serif;
+  color: var(--text); background: rgba(255, 255, 255, .05); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.grade-link b { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(255, 255, 255, .08); }
+.grade-link.g-a b { color: var(--unripe); } .grade-link.g-b b { color: var(--ripe); } .grade-link.g-x b { color: var(--danger); }
 
 /* insights */
 .cm { display: grid; grid-template-columns: 80px repeat(3, minmax(0, 1fr)); gap: 8px; align-items: center; font-size: 13px; }

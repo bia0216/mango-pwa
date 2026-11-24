@@ -18,6 +18,7 @@
     cameraBtn: $("cameraBtn"), fileInput: $("fileInput"), snapBtn: $("snapBtn"), flipBtn: $("flipBtn"), closeCamBtn: $("closeCamBtn"),
     error: $("error"), resultCard: $("resultCard"), verdictLabel: $("verdictLabel"), verdictConf: $("verdictConf"),
     verdictText: $("verdictText"), lowConf: $("lowConf"), bars: $("bars"), againBtn: $("againBtn"),
+    aiDesc: $("aiDesc"), aiDescText: $("aiDescText"), gradeLink: $("gradeLink"),
     settings: $("settings"), settingsBtn: $("settingsBtn"), serverInput: $("serverInput"), saveServerBtn: $("saveServerBtn"),
     settingsMsg: $("settingsMsg"), phoneBox: $("phoneBox"), qr: $("qr"), phoneLink: $("phoneLink"),
     installBtn: $("installBtn"), canvas: $("canvas"),
@@ -115,6 +116,7 @@
     const up = await timedFetch(server + "/gradio_api/upload", { method: "POST", body: fd }, 60000);
     if (!up.ok) throw new Error("Upload to the model server failed (" + up.status + ").");
     const paths = await up.json();
+    lastUploadPath = paths[0];                         // reused by describe() so the photo is uploaded once
 
     const call = await timedFetch(server + "/gradio_api/call/predict", {
       method: "POST",
@@ -128,6 +130,145 @@
 
     const res = await timedFetch(server + "/gradio_api/call/predict/" + event_id, {}, 120000);
     return parseSSE(await res.text());
+  }
+
+  let lastUploadPath = null;
+
+  // Generic Gradio call: POST data, then read the "complete" event of the answer stream. Returns the data array or null.
+  async function gradioCall(endpoint, data, ms = 60000) {
+    const call = await timedFetch(server + "/gradio_api/call/" + endpoint, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }),
+    }, 30000);
+    if (!call.ok) return null;                       // e.g. 404: this server has no such endpoint
+    const { event_id } = await call.json();
+    const res = await timedFetch(server + "/gradio_api/call/" + endpoint + "/" + event_id, {}, ms);
+    let event = null, out = null;
+    for (const line of (await res.text()).split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:") && event === "complete") out = JSON.parse(line.slice(5).trim());
+    }
+    return out;
+  }
+
+  // ---------- disease + Grad-CAM + grade (all from OUR models on the server, cell 7) ----------
+  const D_ORDER = ["healthy", "anthracnose", "stem_end_rot", "bacterial_canker"];
+  const D_COLORS = { healthy: "var(--unripe)", anthracnose: "var(--danger)", stem_end_rot: "var(--overripe)", bacterial_canker: "#B784F5" };
+  const GRADE_STYLE = {
+    "Grade A": { badge: "A", cls: "g-a" }, "Grade B": { badge: "B", cls: "g-b" }, "Reject": { badge: "✕", cls: "g-x" },
+    "Check by hand": { badge: "?", cls: "g-q" }, "No grade": { badge: "–", cls: "g-n" },
+  };
+  const d = {
+    empty: $("dEmpty"), result: $("dResult"), msg: $("dMsg"), msgText: $("dMsgText"), cam: $("dCam"), photo: $("dPhoto"),
+    toggle: $("dToggle"), label: $("dLabel"), conf: $("dConf"), bars: $("dBars"),
+    badge: $("gBadge"), title: $("gTitle"), advice: $("gAdvice"), basis: $("gBasis"),
+  };
+
+  function diseaseMessage(text) {
+    d.empty.hidden = true; d.result.hidden = true;
+    d.msgText.textContent = text; d.msg.hidden = false;
+  }
+
+  function showGradeLink(g) {
+    const st = GRADE_STYLE[g.grade] || { badge: "", cls: "" };
+    el.gradeLink.className = "grade-link " + st.cls;
+    el.gradeLink.textContent = "";
+    const b = document.createElement("b");
+    b.textContent = st.badge;
+    el.gradeLink.append(b, " " + g.grade + (g.name ? " · " + g.name : "") + "  ›  Disease tab");
+    el.gradeLink.hidden = false;
+  }
+
+  async function checkDisease(label, photoUrl) {
+    el.gradeLink.hidden = true;
+    if (!lastUploadPath) return;
+    d.empty.hidden = true; d.result.hidden = true;
+    diseaseMessage("Checking for disease…");
+    let out;
+    try {
+      out = await gradioCall("disease", [{ path: lastUploadPath, meta: { _type: "gradio.FileData" } }, label], 90000);
+    } catch (_) { out = null; }
+    const g = out && out[0];
+    if (!g || g.available === false) {
+      diseaseMessage("The model server has no disease model yet. In Colab, train it (mango_disease.ipynb, D3), then rerun cell 7 and paste the new link in Settings.");
+      return;
+    }
+    showGradeLink(g);
+    d.msg.hidden = true;
+    const st = GRADE_STYLE[g.grade] || { badge: "", cls: "" };
+    d.badge.textContent = st.badge;
+    d.badge.className = "grade-badge " + st.cls;
+    d.title.textContent = g.grade;
+    d.advice.textContent = g.advice || "";
+    if (!g.disease) {                                  // not a mango: no disease check, no Grad-CAM
+      d.result.hidden = false;
+      d.label.textContent = "Not checked";
+      d.label.style.color = "var(--muted)";
+      d.conf.textContent = "";
+      d.bars.innerHTML = "";
+      d.basis.textContent = "The ripeness model says this is not a mango.";
+      d.cam.removeAttribute("src"); d.photo.src = photoUrl; d.cam.hidden = true; d.photo.hidden = false; d.toggle.hidden = true;
+      return;
+    }
+    d.label.textContent = g.name;
+    d.label.style.color = D_COLORS[g.disease] || "var(--text)";
+    d.conf.textContent = Math.round(g.conf * 100) + "% confident";
+    d.basis.textContent = "Based on: ripeness " + g.ripeness + " + " + g.name.toLowerCase() + " (" + Math.round(g.conf * 100) + "%).";
+    d.bars.innerHTML = "";
+    for (const k of D_ORDER) {
+      const v = (g.probs && g.probs[k]) || 0;
+      const row = document.createElement("div");
+      row.className = "bar-row";
+      row.innerHTML = '<span class="name"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="val"></span>';
+      row.querySelector(".name").textContent = (g.names && g.names[k]) || k;
+      row.querySelector(".val").textContent = (v * 100).toFixed(1) + "%";
+      const fill = row.querySelector(".bar-fill");
+      fill.style.background = D_COLORS[k];
+      d.bars.appendChild(row);
+      requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = (v * 100).toFixed(1) + "%"; }));
+    }
+    const cam = out[1];
+    const camUrl = cam && (cam.url || (cam.path ? server + "/gradio_api/file=" + cam.path : ""));
+    d.photo.src = photoUrl;
+    if (camUrl) {
+      d.cam.src = camUrl; d.cam.hidden = false; d.photo.hidden = true; d.toggle.hidden = false; d.toggle.textContent = "Show photo";
+    } else {
+      d.cam.hidden = true; d.photo.hidden = false; d.toggle.hidden = true;
+    }
+    d.result.hidden = false;
+  }
+
+  d.toggle.addEventListener("click", () => {
+    const showCam = d.cam.hidden;
+    d.cam.hidden = !showCam; d.photo.hidden = showCam;
+    d.toggle.textContent = showCam ? "Show photo" : "Show heat map";
+  });
+
+  // Optional text description written by OpenAI on the server (cell 7). The grade itself always comes from our model.
+  // Servers without a "describe" endpoint, or without an OpenAI key, simply return nothing and the box stays hidden.
+  async function describe(label) {
+    el.aiDesc.hidden = true;
+    if (!lastUploadPath || !label) return;
+    try {
+      const call = await timedFetch(server + "/gradio_api/call/describe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: [{ path: lastUploadPath, meta: { _type: "gradio.FileData" } }, label] }),
+      }, 30000);
+      if (!call.ok) return;
+      const { event_id } = await call.json();
+      const res = await timedFetch(server + "/gradio_api/call/describe/" + event_id, {}, 60000);
+      let event = null, text = "";
+      for (const line of (await res.text()).split("\n")) {
+        if (line.startsWith("event:")) event = line.slice(6).trim();
+        else if (line.startsWith("data:") && event === "complete") {
+          const data = JSON.parse(line.slice(5).trim());
+          text = (data && typeof data[0] === "string") ? data[0].trim() : "";
+        }
+      }
+      if (!text) return;
+      el.aiDescText.textContent = text.replace(/\*\*/g, "");   // plain text, never HTML
+      el.aiDesc.hidden = false;
+    } catch (_) { /* description is optional */ }
   }
 
   function parseSSE(text) {
@@ -162,6 +303,8 @@
   }
 
   function renderResult(r, scroll = true) {
+    el.aiDesc.hidden = true;                         // an old description belongs to the previous photo
+    el.gradeLink.hidden = true;
     el.modelUsed.textContent = currentModel() ? "Model: " + currentModel() : "";
     el.modelUsed.hidden = !currentModel();
     if (!(r.label in CLASS_INFO)) {                // "not a mango", or any answer that is not a ripeness class
@@ -261,6 +404,8 @@
       renderResult(r);
       addScan(r);                                    // saved on this device for the Overview tab
       setPill("ok", "Model online · " + new URL(server).host);
+      const lbl = r.label in CLASS_INFO ? r.label : "not a mango";
+      checkDisease(lbl, el.preview.src).finally(() => describe(lbl));   // not awaited: the ripeness shows at once
     } catch (e) {
       const offline = e.name === "AbortError" || e instanceof TypeError;
       showError(offline
@@ -607,6 +752,7 @@
     window.scrollTo({ top: 0 });
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
   window.addEventListener("hashchange", () => showTab(location.hash.slice(1), false));
 
   // Overview quick actions jump to the scan tab

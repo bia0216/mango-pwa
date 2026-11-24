@@ -40,7 +40,7 @@
       <nav class="side glass" aria-label="Main">
         <button class="nav" data-tab="overview"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</button>
         <button class="nav" data-tab="ripeness"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21c-4.5 0-7-3.2-7-7.2C5 8.6 9 4 13.8 4 18 4 20 7 20 10.6 20 16 16.6 21 12 21Z"/><path d="M14 4c.3-1.2 1.3-2 2.6-2"/></svg>Ripeness</button>
-        <button class="nav" data-tab="disease"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/><path d="M12 8v5M12 16h.01"/></svg>Disease<span class="chip">Month 1</span></button>
+        <button class="nav" data-tab="disease"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/><path d="M12 8v5M12 16h.01"/></svg>Disease</button>
         <button class="nav" data-tab="insights"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</button>
       </nav>
 
@@ -149,6 +149,11 @@
                 <p id="modelUsed" class="muted small-text" hidden></p>
                 <p id="lowConf" class="warn" hidden>Low confidence. Check the photo: one mango, good light, mango fills most of the frame.</p>
                 <div id="bars" class="bars"></div>
+                <button id="gradeLink" class="grade-link" type="button" data-goto="disease" hidden></button>
+                <div id="aiDesc" class="ai-desc" hidden>
+                  <span class="ai-tag">AI description · OpenAI (the grade above is from our own model)</span>
+                  <p id="aiDescText"></p>
+                </div>
                 <button id="againBtn" class="btn secondary wide">Try another photo</button>
               </section>
               <section class="card notes">
@@ -156,7 +161,7 @@
                 <ul>
                   <li>Made for the <strong>long yellow mango</strong>, one mango per photo.</li>
                   <li>Photos that don't look like a mango should be answered with "Not a mango". Look-alike fruit can still pass.</li>
-                  <li>It cannot detect disease or rot yet (Month 1).</li>
+                  <li>Disease check: Anthracnose, Stem-end rot and Black spot (bacterial canker). See the <strong>Disease</strong> tab after a scan.</li>
                   <li>Prediction runs on the project's model server, so an internet connection is needed.</li>
                 </ul>
               </section>
@@ -164,37 +169,44 @@
           </div>
         </section>
 
-        <!-- ===== DISEASE (preview) ===== -->
-        <section class="view" data-view="disease" aria-label="Disease (Month 1 preview)">
-          <div class="banner">Design preview: disease detection, Grad-CAM and quality grading are planned for Month 1. Values on this screen are examples.</div>
-          <div class="scan-layout">
+        <!-- ===== DISEASE ===== -->
+        <section class="view" data-view="disease" aria-label="Disease">
+          <div class="view-head">
+            <p class="eyebrow">Disease</p>
+            <h2>Disease check &amp; quality grade</h2>
+          </div>
+          <section id="dEmpty" class="card d-empty">
+            <p class="h3like">No disease check yet</p>
+            <p class="muted">Scan a mango in the <strong>Ripeness</strong> tab (photo or upload). The disease check, Grad-CAM and grade appear here.</p>
+            <button class="btn primary" data-goto="ripeness">Go to Ripeness</button>
+          </section>
+          <div id="dResult" class="scan-layout" hidden>
             <section class="card scan">
-              <div class="card-head"><h2 class="title">Disease check</h2><span class="chip">Example</span></div>
+              <div class="card-head"><h2 class="title">Grad-CAM</h2><button id="dToggle" class="chip chip-btn" type="button">Show photo</button></div>
               <div class="stage disease-stage">
-                <svg viewBox="0 0 512 512" width="300" height="300" class="d-mango" aria-hidden="true"><path d="M150 380 C 100 280, 160 140, 290 115 C 385 98, 430 175, 402 258 C 375 345, 250 450, 150 380 Z" fill="#E9B43A"/><path d="M296 118 C 318 74, 370 58, 414 72 C 388 114, 344 130, 296 118 Z" fill="#4C9A2A"/><circle cx="250" cy="300" r="26" fill="#3A2412"/><circle cx="292" cy="262" r="15" fill="#3A2412"/><circle cx="215" cy="335" r="11" fill="#3A2412"/></svg>
-                <div class="heat" aria-hidden="true"></div>
-                <span class="stage-note">Grad-CAM: where the model looked</span>
+                <img id="dCam" alt="Grad-CAM heat map over the mango photo" />
+                <img id="dPhoto" alt="The scanned mango photo" hidden />
+                <span class="stage-note">Red = where the disease model looked most</span>
               </div>
             </section>
             <aside class="scan-side">
               <section class="card">
-                <div class="card-head"><p class="eyebrow">Disease</p><span class="chip">Example</span></div>
-                <p class="big" style="color: var(--danger)">Anthracnose</p>
-                <div class="bars">
-                  <div class="bar-row"><span class="name">Healthy</span><div class="bar-track"><div class="bar-fill" style="width:18%;background:var(--unripe)"></div></div><span class="val">18%</span></div>
-                  <div class="bar-row"><span class="name">Anthracnose</span><div class="bar-track"><div class="bar-fill" style="width:74%;background:var(--danger)"></div></div><span class="val">74%</span></div>
-                  <div class="bar-row"><span class="name">Other</span><div class="bar-track"><div class="bar-fill" style="width:8%;background:var(--muted)"></div></div><span class="val">8%</span></div>
-                </div>
+                <p class="eyebrow">Disease (our model)</p>
+                <div class="verdict"><span id="dLabel" class="verdict-label d-label"></span><span id="dConf" class="verdict-conf"></span></div>
+                <div id="dBars" class="bars d-bars"></div>
               </section>
               <section class="card grade">
-                <span class="grade-badge">C</span>
+                <span id="gBadge" class="grade-badge"></span>
                 <div>
-                  <p class="h3like">Quality grade (example)</p>
-                  <p class="muted small-text">Ripe + Anthracnose. The grading rule combining ripeness and disease is defined in Month 1.</p>
+                  <p id="gTitle" class="h3like"></p>
+                  <p id="gAdvice" class="muted small-text"></p>
+                  <p id="gBasis" class="muted small-text"></p>
                 </div>
               </section>
+              <p class="muted small-text">Grade = our team's rule (disease ≥ 50% → Reject; unsure → Check by hand; healthy + overripe → B; healthy + unripe/ripe → A). Not an official standard.</p>
             </aside>
           </div>
+          <section id="dMsg" class="card" hidden><p id="dMsgText" class="muted"></p></section>
         </section>
 
         <!-- ===== INSIGHTS ===== -->
@@ -208,6 +220,13 @@
             <section class="card kpi"><span class="big">0.898</span><span class="muted small-text">Macro-F1 (3 classes)</span></section>
             <section class="card kpi"><span class="big">15,111</span><span class="muted small-text">Mango images in the dataset</span></section>
             <section class="card kpi"><span class="big">4,934</span><span class="muted small-text">Photos hand-labeled by the team</span></section>
+          </div>
+          <p class="eyebrow">Disease model (MobileNetV2, 4 classes)</p>
+          <div class="grid4">
+            <section class="card kpi"><span class="big accent">96.4%</span><span class="muted small-text">Test accuracy (441 photos)</span></section>
+            <section class="card kpi"><span class="big">0.963</span><span class="muted small-text">Macro-F1 (95% CI 0.946–0.980)</span></section>
+            <section class="card kpi"><span class="big">8 / 118</span><span class="muted small-text">Main error: black spot called anthracnose</span></section>
+            <section class="card kpi"><span class="big">2</span><span class="muted small-text">Public datasets (CC BY 4.0), Indian varieties</span></section>
           </div>
           <div class="grid2">
             <section class="card">
