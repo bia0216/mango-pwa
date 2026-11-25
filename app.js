@@ -333,6 +333,60 @@
   for (const inp of [d.camInput, d.fileInput]) {
     if (inp) inp.addEventListener("change", () => { const f = inp.files && inp.files[0]; inp.value = ""; scanDisease(f); });
   }
+  // in-app camera for the disease scan (same as the ripeness tab); the phone's own camera picker is the fallback
+  const dv = { video: $("dVideo"), main: $("dMainControls"), cam: $("dCamControls"), flip: $("dFlipBtn") };
+  let dStream = null, dFacing = "environment";
+  function dStopCamera() {
+    if (dStream) dStream.getTracks().forEach((t) => t.stop());
+    dStream = null;
+    dv.video.srcObject = null;
+    dv.video.hidden = true;
+    dv.main.hidden = false;
+    dv.cam.hidden = true;
+  }
+  async function dOpenCamera() {
+    dError("");
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { d.camInput.click(); return; }
+    try {
+      dStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: dFacing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+    } catch (e) {
+      dError("Camera not available (" + (e.name || "error") + "). Allow camera access, or use Upload photo.");
+      return;
+    }
+    dv.video.srcObject = dStream;
+    dv.video.hidden = false;
+    d.placeholder.hidden = true; d.photo.hidden = true; d.cam.hidden = true; d.note.hidden = true; d.toggle.hidden = true;
+    dv.main.hidden = true;
+    dv.cam.hidden = false;
+    try { await dv.video.play(); } catch (_) { /* autoplay quirks */ }
+    try {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter((x) => x.kind === "videoinput");
+      dv.flip.hidden = cams.length < 2;
+    } catch (_) { dv.flip.hidden = true; }
+  }
+  async function dSnap() {
+    const v = dv.video;
+    if (!v.videoWidth) return;
+    const c = document.createElement("canvas");
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext("2d").drawImage(v, 0, 0);
+    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.92));
+    dStopCamera();
+    scanDisease(blob);
+  }
+  $("dCamBtn").addEventListener("click", dOpenCamera);
+  $("dSnapBtn").addEventListener("click", dSnap);
+  $("dCloseCamBtn").addEventListener("click", () => {
+    dStopCamera();
+    if (d.photo.hidden && d.cam.hidden) d.placeholder.hidden = false;
+  });
+  dv.flip.addEventListener("click", async () => {
+    dFacing = dFacing === "environment" ? "user" : "environment";
+    dStopCamera();
+    await dOpenCamera();
+  });
+
   if (d.toggle) d.toggle.addEventListener("click", () => {
     const showCam = d.cam.hidden;
     d.cam.hidden = !showCam; d.photo.hidden = showCam; d.note.hidden = !showCam;
@@ -1220,6 +1274,10 @@
       el.mainControls.hidden = false;
       el.cameraControls.hidden = true;
       if (el.preview.hidden) el.placeholder.hidden = false;
+    }
+    if (name !== "disease" && dStream) {             // leaving the disease tab turns its camera off too
+      dStopCamera();
+      if (d.photo.hidden && d.cam.hidden) d.placeholder.hidden = false;
     }
     if (name === "overview") renderOverview();
     if (updateHash && location.hash !== "#" + name) history.replaceState(null, "", "#" + name);

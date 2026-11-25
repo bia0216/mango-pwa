@@ -243,22 +243,28 @@
                   <p><strong>Mangoes (each one is checked) or one mango leaf</strong></p>
                   <p class="muted">Take a photo or upload one. This scan is separate from ripeness.</p>
                 </div>
+                <video id="dVideo" playsinline muted hidden></video>
                 <img id="dCam" alt="Grad-CAM heat map over the photo" hidden>
                 <img id="dPhoto" alt="The scanned photo" hidden>
                 <span id="dNote" class="stage-note" hidden>Red = where the disease model looked most</span>
                 <div id="dBusy" class="busy" hidden><div class="spinner"></div><span>Checking…</span></div>
               </div>
-              <div class="controls">
-                <label class="btn primary" for="dCamInput">
+              <div id="dMainControls" class="controls">
+                <button id="dCamBtn" class="btn primary" type="button">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4Z"/><circle cx="12" cy="13" r="3.5"/></svg>
                   Take photo
-                </label>
+                </button>
                 <input id="dCamInput" type="file" accept="image/*" capture="environment" hidden>
                 <label class="btn secondary" for="dFileInput">
                   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
                   Upload photo
                 </label>
                 <input id="dFileInput" type="file" accept="image/*" hidden>
+              </div>
+              <div id="dCamControls" class="controls" hidden>
+                <button id="dSnapBtn" class="btn primary" type="button">Capture and check</button>
+                <button id="dFlipBtn" class="btn secondary" type="button" hidden>Switch camera</button>
+                <button id="dCloseCamBtn" class="btn ghost" type="button">Cancel</button>
               </div>
               <div id="dError" class="error" role="alert" hidden></div>
             </section>
