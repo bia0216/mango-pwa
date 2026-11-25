@@ -150,98 +150,101 @@
     return out;
   }
 
-  // ---------- disease + Grad-CAM + grade (all from OUR models on the server, cell 7) ----------
-  const D_ORDER = ["healthy", "anthracnose", "stem_end_rot", "bacterial_canker"];
-  const D_COLORS = { healthy: "var(--unripe)", anthracnose: "var(--danger)", stem_end_rot: "var(--overripe)", bacterial_canker: "#B784F5" };
-  const GRADE_STYLE = {
-    "Grade A": { badge: "A", cls: "g-a" }, "Grade B": { badge: "B", cls: "g-b" }, "Reject": { badge: "✕", cls: "g-x" },
-    "Check by hand": { badge: "?", cls: "g-q" }, "No grade": { badge: "–", cls: "g-n" },
+  // ---------- disease scan: SEPARATE from ripeness (mentor), a mango OR a mango leaf, all from OUR model (cell 7) ----------
+  // the class list comes from the server, so any disease model version works
+  const D_COLORS = { healthy: "var(--unripe)", anthracnose: "var(--danger)", stem_end_rot: "var(--overripe)",
+                     bacterial_canker: "#B784F5", black_tip: "#8FA3FF",
+                     leaf_healthy: "#7FD49A", leaf_bacterial_canker: "#B784F5", leaf_other: "#E0A35C" };
+  const VERDICT_STYLE = {
+    "Healthy": { badge: "✓", cls: "g-a" }, "Disease found": { badge: "✕", cls: "g-x" }, "Check by hand": { badge: "?", cls: "g-q" },
   };
   const d = {
-    empty: $("dEmpty"), result: $("dResult"), msg: $("dMsg"), msgText: $("dMsgText"), cam: $("dCam"), photo: $("dPhoto"),
-    toggle: $("dToggle"), label: $("dLabel"), conf: $("dConf"), bars: $("dBars"),
-    badge: $("gBadge"), title: $("gTitle"), advice: $("gAdvice"), basis: $("gBasis"),
+    placeholder: $("dPlaceholder"), cam: $("dCam"), photo: $("dPhoto"), note: $("dNote"), busy: $("dBusy"),
+    toggle: $("dToggle"), error: $("dError"), resultCard: $("dResultCard"), verdictCard: $("dVerdictCard"),
+    label: $("dLabel"), conf: $("dConf"), bars: $("dBars"), badge: $("gBadge"), title: $("gTitle"), advice: $("gAdvice"),
+    camInput: $("dCamInput"), fileInput: $("dFileInput"),
   };
 
-  function diseaseMessage(text) {
-    d.empty.hidden = true; d.result.hidden = true;
-    d.msgText.textContent = text; d.msg.hidden = false;
+  function dError(msg) { if (d.error) { d.error.textContent = msg; d.error.hidden = !msg; } }
+
+  async function uploadBlob(blob) {
+    const fd = new FormData();
+    fd.append("files", blob, "photo.jpg");
+    const up = await timedFetch(server + "/gradio_api/upload", { method: "POST", body: fd }, 60000);
+    if (!up.ok) throw new Error("Upload to the model server failed (" + up.status + ").");
+    return (await up.json())[0];
   }
 
-  function showGradeLink(g) {
-    if (!el.gradeLink) return;
-    const st = GRADE_STYLE[g.grade] || { badge: "", cls: "" };
-    el.gradeLink.className = "grade-link " + st.cls;
-    el.gradeLink.textContent = "";
-    const b = document.createElement("b");
-    b.textContent = st.badge;
-    el.gradeLink.append(b, " " + g.grade + (g.name ? " · " + g.name : "") + "  ›  Disease tab");
-    el.gradeLink.hidden = false;
-  }
-
-  async function checkDisease(label, photoUrl, scanId) {
-    if (el.gradeLink) el.gradeLink.hidden = true;
-    if (!lastUploadPath) return;
-    d.empty.hidden = true; d.result.hidden = true;
-    diseaseMessage("Checking for disease…");
-    let out;
-    try {
-      out = await gradioCall("disease", [{ path: lastUploadPath, meta: { _type: "gradio.FileData" } }, label], 90000);
-    } catch (_) { out = null; }
-    const g = out && out[0];
-    if (!g || g.available === false) {
-      diseaseMessage("The model server has no disease model yet. In Colab, train it (mango_disease.ipynb, D3), then rerun cell 7 and paste the new link in Settings.");
-      return;
-    }
-    showGradeLink(g);
-    if (scanId) updateScan(scanId, { grade: g.grade, disease: g.disease || null, dconf: g.disease ? g.conf : null });
-    d.msg.hidden = true;
-    const st = GRADE_STYLE[g.grade] || { badge: "", cls: "" };
-    d.badge.textContent = st.badge;
-    d.badge.className = "grade-badge " + st.cls;
-    d.title.textContent = g.grade;
-    d.advice.textContent = g.advice || "";
-    if (!g.disease) {                                  // not a mango: no disease check, no Grad-CAM
-      d.result.hidden = false;
-      d.label.textContent = "Not checked";
-      d.label.style.color = "var(--muted)";
-      d.conf.textContent = "";
-      d.bars.innerHTML = "";
-      d.basis.textContent = "The ripeness model says this is not a mango.";
-      d.cam.removeAttribute("src"); d.photo.src = photoUrl; d.cam.hidden = true; d.photo.hidden = false; d.toggle.hidden = true;
-      return;
-    }
+  function renderDisease(g, cam) {
     d.label.textContent = g.name;
     d.label.style.color = D_COLORS[g.disease] || "var(--text)";
     d.conf.textContent = Math.round(g.conf * 100) + "% confident";
-    d.basis.textContent = "Based on: ripeness " + g.ripeness + " + " + g.name.toLowerCase() + " (" + Math.round(g.conf * 100) + "%).";
     d.bars.innerHTML = "";
-    for (const k of D_ORDER) {
-      const v = (g.probs && g.probs[k]) || 0;
+    for (const k of Object.keys(g.probs || {})) {
+      const v = g.probs[k] || 0;
       const row = document.createElement("div");
       row.className = "bar-row";
       row.innerHTML = '<span class="name"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="val"></span>';
       row.querySelector(".name").textContent = (g.names && g.names[k]) || k;
       row.querySelector(".val").textContent = (v * 100).toFixed(1) + "%";
       const fill = row.querySelector(".bar-fill");
-      fill.style.background = D_COLORS[k];
+      fill.style.background = D_COLORS[k] || "var(--muted)";
       d.bars.appendChild(row);
       requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = (v * 100).toFixed(1) + "%"; }));
     }
-    const cam = out[1];
+    const st = VERDICT_STYLE[g.verdict] || { badge: "", cls: "" };
+    d.badge.textContent = st.badge;
+    d.badge.className = "grade-badge " + st.cls;
+    d.title.textContent = g.verdict || "";
+    d.advice.textContent = g.advice || "";
     const camUrl = cam && (cam.url || (cam.path ? server + "/gradio_api/file=" + cam.path : ""));
-    d.photo.src = photoUrl;
     if (camUrl) {
-      d.cam.src = camUrl; d.cam.hidden = false; d.photo.hidden = true; d.toggle.hidden = false; d.toggle.textContent = "Show photo";
-    } else {
-      d.cam.hidden = true; d.photo.hidden = false; d.toggle.hidden = true;
+      d.cam.src = camUrl; d.cam.hidden = false; d.photo.hidden = true; d.note.hidden = false;
+      d.toggle.hidden = false; d.toggle.textContent = "Show photo";
     }
-    d.result.hidden = false;
+    d.resultCard.hidden = false;
+    d.verdictCard.hidden = false;
   }
 
-  if (d.toggle) d.toggle.addEventListener("click", () => {   // guarded: an older cached index.html has no Disease tab
+  async function scanDisease(file) {
+    if (!file) return;
+    dError("");
+    if (!server) { openSettings("Add the model server link first, then scan again."); return; }
+    let jpeg;
+    try { jpeg = await toJpeg(file); } catch (e) { dError(e.message || "Could not read this image."); return; }
+    d.placeholder.hidden = true;
+    d.photo.src = URL.createObjectURL(jpeg); d.photo.hidden = false;
+    d.cam.hidden = true; d.note.hidden = true; d.toggle.hidden = true;
+    d.resultCard.hidden = true; d.verdictCard.hidden = true;
+    d.busy.hidden = false;
+    try {
+      const path = await uploadBlob(jpeg);
+      const out = await gradioCall("disease_scan", [{ path, meta: { _type: "gradio.FileData" } }], 90000);
+      const g = out && out[0];
+      if (!g || g.available === false) {
+        dError("The model server has no disease scan yet. In Colab: train the disease model (mango_disease.ipynb, D3), "
+               + "run the newest cell 7 of mango_models_compare.ipynb, and paste the new link in Settings.");
+        return;
+      }
+      renderDisease(g, out[1]);
+      addDiseaseScan(g);
+      setPill("ok", "Model online · " + new URL(server).host);
+    } catch (e) {
+      const offline = e.name === "AbortError" || e instanceof TypeError;
+      dError(offline ? "Can't reach the model server. Is cell 7 still running in Colab? Paste its newest link in Settings."
+                     : (e.message || "Something went wrong."));
+      if (offline) setPill("bad", "Model server offline (tap to change link)");
+    } finally {
+      d.busy.hidden = true;
+    }
+  }
+
+  for (const inp of [d.camInput, d.fileInput]) {
+    if (inp) inp.addEventListener("change", () => { const f = inp.files && inp.files[0]; inp.value = ""; scanDisease(f); });
+  }
+  if (d.toggle) d.toggle.addEventListener("click", () => {
     const showCam = d.cam.hidden;
-    d.cam.hidden = !showCam; d.photo.hidden = showCam;
+    d.cam.hidden = !showCam; d.photo.hidden = showCam; d.note.hidden = !showCam;
     d.toggle.textContent = showCam ? "Show photo" : "Show heat map";
   });
 
@@ -406,9 +409,9 @@
       setPill("ok", "Model online · " + new URL(server).host);
       try {                                          // a display problem must not look like "server offline"
         renderResult(r);
-        const scanId = addScan(r);                   // saved on this device for the Overview tab
+        addScan(r);                                  // saved on this device for the Overview tab
         const lbl = r.label in CLASS_INFO ? r.label : "not a mango";
-        if (d.empty) checkDisease(lbl, el.preview.src, scanId).catch(() => {}).finally(() => describe(lbl));   // not awaited
+        describe(lbl);                               // optional OpenAI text; not awaited (disease is a separate scan)
       } catch (uiErr) {
         showError("The model answered (" + r.label + "), but the app could not show it: " + uiErr.message +
                   ". Reload the page; if it stays, upload ALL files from mango-pwa.zip again.");
@@ -696,16 +699,14 @@
     const t = Date.now();
     s.push({ t, label: known ? r.label : "not a mango", conf: c ?? null, model: currentModel(), batch: currentBatch().id });
     saveScans(s);
-    return t;                                        // id of this scan, used to add the disease result later
   }
-  function updateScan(t, patch) {
+  function addDiseaseScan(g) {                       // a separate disease scan (mango or leaf)
     const s = loadScans();
-    const x = s.find((y) => y.t === t);
-    if (!x) return;
-    Object.assign(x, patch);
+    s.push({ t: Date.now(), type: "disease", label: g.disease, name: g.name, part: g.part || "mango",
+             conf: g.conf, verdict: g.verdict, batch: currentBatch().id });
     saveScans(s);
-    renderOverview();
   }
+  const isDisease = (x) => x.type === "disease";
   function ago(t) {
     const m = Math.round((Date.now() - t) / 60000);
     if (m < 1) return "just now";
@@ -714,23 +715,26 @@
     return h < 24 ? h + " h ago" : Math.round(h / 24) + " d ago";
   }
 
-  const GRADE_COLORS = { "Grade A": "#5BC27A", "Grade B": "#F2B42C", "Reject": "#FF8A6B", "Check by hand": "#C9D6CC",
-                         "No grade": "#6F8576", "Not graded": "rgba(255,255,255,.22)" };
-  let donutMode = "grade";
-  const gradeOf = (x) => x.grade || "Not graded";     // older scans and scans without a disease server have no grade
-  function gradeBadge(g) {
-    const st = GRADE_STYLE[g];
-    return st ? `<b class="mini-badge ${st.cls}" title="${esc(g)}">${st.badge}</b>` : "";
+  const VERDICT_COLORS = { "Healthy": "#5BC27A", "Disease found": "#FF8A6B", "Check by hand": "#C9D6CC" };
+  let donutMode = "ripeness";
+  function verdictBadge(v) {
+    const st = VERDICT_STYLE[v];
+    return st ? `<b class="mini-badge ${st.cls}" title="${esc(v)}">${st.badge}</b>` : "";
   }
+  const scanName = (x) => isDisease(x) ? (x.name || x.label) : cap(x.label);
+  const scanColor = (x) => isDisease(x) ? (VERDICT_COLORS[x.verdict] || "") : (COLORS[x.label] || "");
 
   function renderBatch(s) {
     const b = currentBatch();
     const mine = s.filter((x) => x.batch === b.id);
+    const dis = mine.filter(isDisease);
     $("batchName").textContent = "Batch " + b.id;
-    $("batchCount").textContent = mine.length + (mine.length === 1 ? " mango" : " mangoes");
-    const parts = ["Grade A", "Grade B", "Reject", "Check by hand"].map((g) => [g, mine.filter((x) => x.grade === g).length]).filter(([, n]) => n);
+    $("batchCount").textContent = mine.length + (mine.length === 1 ? " scan" : " scans");
+    const parts = [];
+    if (mine.length - dis.length) parts.push((mine.length - dis.length) + " ripeness");
+    if (dis.length) parts.push(dis.length + " disease (" + dis.filter((x) => x.verdict === "Disease found").length + " found)");
     $("batchGrades").textContent = "Started " + new Date(b.started).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
-      + (parts.length ? " · " + parts.map(([g, n]) => g.replace("Grade ", "") + " " + n).join(" · ") : "");
+      + (parts.length ? " · " + parts.join(" · ") : "");
     $("reportBtn").disabled = !mine.length;
   }
 
@@ -742,9 +746,10 @@
     const b = currentBatch();
     const mine = loadScans().filter((x) => x.batch === b.id);
     if (!mine.length) return;
-    const head = ["batch", "time", "ripeness", "ripeness_confidence", "disease", "disease_confidence", "grade", "model"];
-    const rows = mine.map((x) => [b.id, new Date(x.t).toLocaleString(), x.label, x.conf != null ? x.conf.toFixed(3) : "",
-      x.disease || "", x.dconf != null ? x.dconf.toFixed(3) : "", x.grade || "Not graded", x.model || ""]);
+    const head = ["batch", "time", "scan", "result", "confidence", "verdict", "model"];
+    const rows = mine.map((x) => [b.id, new Date(x.t).toLocaleString(),
+      isDisease(x) ? "disease (" + (x.part || "mango") + ")" : "ripeness", scanName(x),
+      x.conf != null ? x.conf.toFixed(3) : "", isDisease(x) ? x.verdict || "" : "", x.model || ""]);
     const csv = [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -759,16 +764,20 @@
   function renderOverview() {
     const s = loadScans();
     const last = s[s.length - 1];
-    $("lastLabel").textContent = last ? cap(last.label) + (last.conf != null ? " · " + Math.round(last.conf * 100) + "%" : "") : "No scans yet";
-    $("lastLabel").style.color = last ? COLORS[last.label] : "";
-    $("lastMeta").textContent = last ? (last.grade ? last.grade + " · " : "") + (last.model ? last.model + " · " : "") + ago(last.t) : "Scan a mango to see it here.";
+    $("lastLabel").textContent = last ? scanName(last) + (last.conf != null ? " · " + Math.round(last.conf * 100) + "%" : "") : "No scans yet";
+    $("lastLabel").style.color = last ? scanColor(last) : "";
+    $("lastMeta").textContent = last
+      ? (isDisease(last) ? "Disease scan (" + (last.part || "mango") + ") · " + (last.verdict || "") + " · " : "Ripeness scan · ")
+        + (last.model ? last.model + " · " : "") + ago(last.t)
+      : "Scan a mango to see it here.";
     renderBatch(s);
 
-    // donut: your scans by grade (default) or by ripeness
-    const colors = donutMode === "grade" ? GRADE_COLORS : COLORS;
-    const keyOf = donutMode === "grade" ? gradeOf : (x) => x.label;
-    const keys = Object.keys(colors).filter((k) => k !== "Not graded" || s.some((x) => !x.grade));
-    const counts = keys.map((k) => s.filter((x) => keyOf(x) === k).length);
+    // donut: ripeness scans by result, or disease scans by verdict
+    const colors = donutMode === "disease" ? VERDICT_COLORS : COLORS;
+    const pool = s.filter((x) => (donutMode === "disease") === isDisease(x));
+    const keyOf = donutMode === "disease" ? (x) => x.verdict : (x) => x.label;
+    const keys = Object.keys(colors);
+    const counts = keys.map((k) => pool.filter((x) => keyOf(x) === k).length);
     const total = counts.reduce((a, b) => a + b, 0);
     const C = 2 * Math.PI * 60;
     let off = 0;
@@ -801,25 +810,25 @@
     // recent scans
     const rec = s.slice(-5).reverse();
     $("recentList").innerHTML = rec.length
-      ? rec.map((x) => `<li><span class="rec-main">${gradeBadge(x.grade)}<span style="color:${COLORS[x.label]}">${cap(x.label)}</span></span><span class="meta">`
+      ? rec.map((x) => `<li><span class="rec-main">${isDisease(x) ? verdictBadge(x.verdict) : ""}<span style="color:${scanColor(x)}">${esc(scanName(x))}</span></span><span class="meta">`
           + `${x.conf != null ? Math.round(x.conf * 100) + "% · " : ""}${x.model ? esc(x.model) + " · " : ""}${ago(x.t)}</span></li>`).join("")
       : '<li><span class="muted">No scans yet</span></li>';
   }
 
   function setDonutMode(m) {
     donutMode = m;
-    $("segGrade").classList.toggle("on", m === "grade");
-    $("segRipe").classList.toggle("on", m !== "grade");
-    $("segGrade").setAttribute("aria-pressed", String(m === "grade"));
-    $("segRipe").setAttribute("aria-pressed", String(m !== "grade"));
+    $("segGrade").classList.toggle("on", m === "disease");
+    $("segRipe").classList.toggle("on", m !== "disease");
+    $("segGrade").setAttribute("aria-pressed", String(m === "disease"));
+    $("segRipe").setAttribute("aria-pressed", String(m !== "disease"));
     renderOverview();
   }
-  $("segGrade").addEventListener("click", () => setDonutMode("grade"));
+  $("segGrade").addEventListener("click", () => setDonutMode("disease"));
   $("segRipe").addEventListener("click", () => setDonutMode("ripeness"));
   $("reportBtn").addEventListener("click", downloadReport);
   $("newBatchBtn").addEventListener("click", () => {
     const n = loadScans().filter((x) => x.batch === currentBatch().id).length;
-    if (n && !confirm(`Start a new batch? Batch ${currentBatch().id} (${n} mangoes) stays in the history; download its report first if you need it.`)) return;
+    if (n && !confirm(`Start a new batch? Batch ${currentBatch().id} (${n} scans) stays in the history; download its report first if you need it.`)) return;
     const b = newBatch();
     $("batchMsg").textContent = "Batch " + b.id + " started. New scans are counted here.";
     $("batchMsg").hidden = false;

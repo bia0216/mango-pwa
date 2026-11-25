@@ -52,19 +52,19 @@
             <h2>Ready to grade</h2>
           </div>
           <ol class="flow" aria-label="How it works">
-            <li><button type="button" data-goto="ripeness"><b>1</b><span><strong>Scan</strong><small>Photo, upload or live</small></span></button></li>
+            <li><button type="button" data-goto="ripeness"><b>1</b><span><strong>Ripeness scan</strong><small>Photo, upload or live</small></span></button></li>
             <li><button type="button" data-goto="ripeness"><b>2</b><span><strong>Ripeness</strong><small>Unripe · ripe · overripe</small></span></button></li>
-            <li><button type="button" data-goto="disease"><b>3</b><span><strong>Disease</strong><small>+ Grad-CAM: why</small></span></button></li>
-            <li><button type="button" data-goto="disease"><b>4</b><span><strong>Grade</strong><small>A · B · Reject · Check</small></span></button></li>
+            <li><button type="button" data-goto="disease"><b>3</b><span><strong>Disease scan</strong><small>Mango or leaf</small></span></button></li>
+            <li><button type="button" data-goto="disease"><b>4</b><span><strong>Disease + why</strong><small>Grad-CAM · verdict</small></span></button></li>
           </ol>
           <div class="grid3">
             <section class="card hero">
-              <h3>Scan a mango</h3>
-              <p class="muted">One mango per photo. You get its ripeness, a disease check and a quality grade, or "not a mango".</p>
+              <h3>Scan</h3>
+              <p class="muted">Two separate checks: <strong>ripeness</strong> of a mango, and <strong>disease</strong> on a mango or a mango leaf.</p>
               <div class="row">
-                <button class="btn primary" data-quick="camera">Take photo</button>
-                <button class="btn secondary" data-quick="upload">Upload</button>
+                <button class="btn primary" data-quick="camera">Ripeness: photo</button>
                 <button class="btn secondary" data-quick="live"><span class="rec"></span>Live</button>
+                <button class="btn secondary" data-goto="disease">Disease check</button>
               </div>
             </section>
             <section class="card">
@@ -74,7 +74,7 @@
             </section>
             <section class="card batch">
               <div class="card-head"><p class="eyebrow">Current batch</p><span id="batchName" class="chip"></span></div>
-              <p id="batchCount" class="big">0 mangoes</p>
+              <p id="batchCount" class="big">0 scans</p>
               <p id="batchGrades" class="muted small-text"></p>
               <div class="row">
                 <button id="reportBtn" class="btn secondary" type="button">Download report (CSV)</button>
@@ -87,8 +87,8 @@
             <section class="card">
               <div class="card-head"><h3>Your scans</h3>
                 <div class="seg" role="group" aria-label="Show scans by">
-                  <button id="segGrade" type="button" class="on" aria-pressed="true">Grade</button>
-                  <button id="segRipe" type="button" aria-pressed="false">Ripeness</button>
+                  <button id="segRipe" type="button" class="on" aria-pressed="true">Ripeness</button>
+                  <button id="segGrade" type="button" aria-pressed="false">Disease</button>
                 </div>
               </div>
               <div class="donut-row">
@@ -161,7 +161,6 @@
                 <p id="modelUsed" class="muted small-text" hidden></p>
                 <p id="lowConf" class="warn" hidden>Low confidence. Check the photo: one mango, good light, mango fills most of the frame.</p>
                 <div id="bars" class="bars"></div>
-                <button id="gradeLink" class="grade-link" type="button" data-goto="disease" hidden></button>
                 <div id="aiDesc" class="ai-desc" hidden>
                   <span class="ai-tag">AI description · OpenAI (the grade above is from our own model)</span>
                   <p id="aiDescText"></p>
@@ -173,7 +172,7 @@
                 <ul>
                   <li>Made for the <strong>long yellow mango</strong>, one mango per photo.</li>
                   <li>Photos that don't look like a mango should be answered with "Not a mango". Look-alike fruit can still pass.</li>
-                  <li>Disease check: Anthracnose, Stem-end rot and Black spot (bacterial canker). See the <strong>Disease</strong> tab after a scan.</li>
+                  <li>Disease is a separate scan (mango or leaf) in the <strong>Disease</strong> tab.</li>
                   <li>Prediction runs on the project's model server, so an internet connection is needed.</li>
                 </ul>
               </section>
@@ -185,40 +184,60 @@
         <section class="view" data-view="disease" aria-label="Disease">
           <div class="view-head">
             <p class="eyebrow">Disease</p>
-            <h2>Disease check &amp; quality grade</h2>
+            <h2>Disease check: mango or leaf</h2>
           </div>
-          <section id="dEmpty" class="card d-empty">
-            <p class="h3like">No disease check yet</p>
-            <p class="muted">Scan a mango in the <strong>Ripeness</strong> tab (photo or upload). The disease check, Grad-CAM and grade appear here.</p>
-            <button class="btn primary" data-goto="ripeness">Go to Ripeness</button>
-          </section>
-          <div id="dResult" class="scan-layout" hidden>
+          <div class="scan-layout">
             <section class="card scan">
-              <div class="card-head"><h2 class="title">Grad-CAM</h2><button id="dToggle" class="chip chip-btn" type="button">Show photo</button></div>
+              <div class="card-head"><h2 class="title">Disease scan</h2><button id="dToggle" class="chip chip-btn" type="button" hidden>Show photo</button></div>
               <div class="stage disease-stage">
-                <img id="dCam" alt="Grad-CAM heat map over the mango photo" />
-                <img id="dPhoto" alt="The scanned mango photo" hidden />
-                <span class="stage-note">Red = where the disease model looked most</span>
+                <div id="dPlaceholder" class="placeholder">
+                  <img src="icons/icon.svg" alt="" width="64" height="64">
+                  <p><strong>One mango or one mango leaf per photo</strong></p>
+                  <p class="muted">Take a photo or upload one. This scan is separate from ripeness.</p>
+                </div>
+                <img id="dCam" alt="Grad-CAM heat map over the photo" hidden>
+                <img id="dPhoto" alt="The scanned photo" hidden>
+                <span id="dNote" class="stage-note" hidden>Red = where the disease model looked most</span>
+                <div id="dBusy" class="busy" hidden><div class="spinner"></div><span>Checking…</span></div>
               </div>
+              <div class="controls">
+                <label class="btn primary" for="dCamInput">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+                  Take photo
+                </label>
+                <input id="dCamInput" type="file" accept="image/*" capture="environment" hidden>
+                <label class="btn secondary" for="dFileInput">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+                  Upload photo
+                </label>
+                <input id="dFileInput" type="file" accept="image/*" hidden>
+              </div>
+              <div id="dError" class="error" role="alert" hidden></div>
             </section>
             <aside class="scan-side">
-              <section class="card">
+              <section id="dResultCard" class="card" hidden aria-live="polite">
                 <p class="eyebrow">Disease (our model)</p>
                 <div class="verdict"><span id="dLabel" class="verdict-label d-label"></span><span id="dConf" class="verdict-conf"></span></div>
                 <div id="dBars" class="bars d-bars"></div>
               </section>
-              <section class="card grade">
+              <section id="dVerdictCard" class="card grade" hidden>
                 <span id="gBadge" class="grade-badge"></span>
                 <div>
                   <p id="gTitle" class="h3like"></p>
                   <p id="gAdvice" class="muted small-text"></p>
-                  <p id="gBasis" class="muted small-text"></p>
                 </div>
               </section>
-              <p class="muted small-text">Grade = our team's rule (disease ≥ 50% → Reject; unsure → Check by hand; healthy + overripe → B; healthy + unripe/ripe → A). Not an official standard.</p>
+              <section class="card notes">
+                <h3>Good to know</h3>
+                <ul>
+                  <li><strong>Mango:</strong> healthy, anthracnose, stem-end rot (black tip once our own photos are added).</li>
+                  <li><strong>Leaf:</strong> healthy, <strong>bacterial canker</strong>, or another leaf disease.</li>
+                  <li>Verdict = our team's rule: disease ≥ 50% → Disease found; healthy ≥ 60% → Healthy; otherwise Check by hand. Not an official standard.</li>
+                  <li>Ripeness is a separate scan in the <strong>Ripeness</strong> tab.</li>
+                </ul>
+              </section>
             </aside>
           </div>
-          <section id="dMsg" class="card" hidden><p id="dMsgText" class="muted"></p></section>
         </section>
 
         <!-- ===== INSIGHTS ===== -->

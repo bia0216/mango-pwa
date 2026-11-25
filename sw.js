@@ -1,5 +1,5 @@
 // Network-first service worker: always tries the latest files, falls back to the cache when offline.
-const CACHE = "mango-pwa-v5";
+const CACHE = "mango-pwa-v7";
 const ASSETS = [
   "./",
   "index.html",
