@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Mango Grader</title>
-  <meta name="description" content="Take or upload a photo of one mango and get its ripeness: unripe, ripe or overripe.">
+  <meta name="description" content="Photograph mangoes to grade each one's ripeness, or check a mango or leaf for disease with a heat map.">
   <meta name="theme-color" content="#0B140F">
   <script>
     // light / dark before the page draws (no flash). Saved choice wins, otherwise the phone's setting.
@@ -32,7 +32,7 @@
         <img src="icons/icon.svg" alt="" width="38" height="38">
         <div>
           <h1>Mango Grader</h1>
-          <p>Ripeness classification · transfer learning</p>
+          <p>Ripeness &amp; disease grading · transfer learning</p>
         </div>
       </div>
       <div class="top-actions">
@@ -66,10 +66,10 @@
             <h2>Ready to grade</h2>
           </div>
           <ol class="flow" aria-label="How it works">
-            <li><button type="button" data-goto="ripeness"><b>1</b><span><strong>Ripeness scan</strong><small>Photo, upload or live</small></span></button></li>
-            <li><button type="button" data-goto="ripeness"><b>2</b><span><strong>Ripeness</strong><small>Unripe · ripe · overripe</small></span></button></li>
-            <li><button type="button" data-goto="disease"><b>3</b><span><strong>Disease scan</strong><small>Mango or leaf</small></span></button></li>
-            <li><button type="button" data-goto="disease"><b>4</b><span><strong>Disease + why</strong><small>Grad-CAM · verdict</small></span></button></li>
+            <li><button type="button" data-goto="ripeness"><b>1</b><span><strong>Scan</strong><small>Ripeness or disease</small></span></button></li>
+            <li><button type="button" data-goto="ripeness"><b>2</b><span><strong>Grade each mango</strong><small>Boxes · heat map</small></span></button></li>
+            <li><button type="button" data-goto="ripeness"><b>3</b><span><strong>Was it right?</strong><small>Confirm or correct</small></span></button></li>
+            <li><button type="button" data-scroll="batchSummary"><b>4</b><span><strong>Batch report</strong><small>Summary · CSV · share</small></span></button></li>
           </ol>
           <div class="grid3">
             <section class="card hero">
@@ -98,7 +98,7 @@
             </section>
           </div>
           <div class="grid3">
-            <section class="card">
+            <section id="batchSummary" class="card">
               <div class="card-head"><h3 id="donutTitle">Batch summary</h3>
                 <div class="seg" role="group" aria-label="Show scans by">
                   <button id="segRipe" type="button" class="on" aria-pressed="true">Ripeness</button>

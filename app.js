@@ -1227,6 +1227,10 @@
   }
   document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
   document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
+  document.querySelectorAll("[data-scroll]").forEach((b) => b.addEventListener("click", () => {   // Overview step 4
+    const t = $(b.dataset.scroll);
+    if (t) t.scrollIntoView({ behavior: "smooth", block: "center" });
+  }));
   window.addEventListener("hashchange", () => showTab(location.hash.slice(1), false));
 
   // Overview quick actions jump to the scan tab
