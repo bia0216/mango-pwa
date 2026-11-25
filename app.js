@@ -24,10 +24,34 @@
     installBtn: $("installBtn"), canvas: $("canvas"),
     liveBtn: $("liveBtn"), liveTag: $("liveTag"), liveText: $("liveText"),
     modelRow: $("modelRow"), modelSelect: $("modelSelect"), modelUsed: $("modelUsed"), mItems: $("mItems"),
+    feedback: $("rFeedback"),
   };
   const LOW_ONE = el.lowConf.textContent;
   const LOW_MANY = "Low confidence on at least one mango. Check that mango in good light, close up.";
   const fileUrl = (f) => (f && (f.url || (f.path ? server + "/gradio_api/file=" + f.path : ""))) || "";
+
+  // ---------- light / dark mode (index.html already set it before drawing) ----------
+  const THEME_KEY = "mango.theme";
+  const themeBtn = $("themeBtn");
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = t;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = t === "light" ? "#FBF6EA" : "#0B140F";
+    if (themeBtn) themeBtn.setAttribute("aria-label", t === "light" ? "Switch to dark mode" : "Switch to light mode");
+  }
+  applyTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+  if (themeBtn) themeBtn.addEventListener("click", () => {
+    const t = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    applyTheme(t);
+    try { localStorage.setItem(THEME_KEY, t); } catch (_) { /* ignore */ }
+  });
+  try {                                                  // follow the phone's setting until the user picks one
+    window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
+      let saved = null;
+      try { saved = localStorage.getItem(THEME_KEY); } catch (_) { /* ignore */ }
+      if (!saved) applyTheme(e.matches ? "light" : "dark");
+    });
+  } catch (_) { /* old browsers */ }
 
   // ---------- model server (the Gradio app from notebook cell J) ----------
   let server = "";
@@ -91,17 +115,19 @@
     // Gradio lists choices as ["Label", "value"] pairs (newer) or plain strings (older)
     const choices = raw.map((ch) => Array.isArray(ch) ? { label: String(ch[0]), value: String(ch[1] ?? ch[0]) }
                                                       : { label: String(ch), value: String(ch) });
+    const values = choices.map((c) => c.value);
+    const best = comp && comp.props && values.includes(String(comp.props.value)) ? String(comp.props.value) : "";
     select.innerHTML = "";
     for (const c of choices) {
       const o = document.createElement("option");
       o.value = c.value;
-      o.textContent = c.label;
+      o.textContent = c.label + (c.value === best && values.length > 1 ? " (recommended)" : "");
       select.appendChild(o);
     }
-    const values = choices.map((c) => c.value);
     let saved = "";
     try { saved = localStorage.getItem(key) || ""; } catch (_) { /* ignore */ }
-    if (values.includes(saved)) select.value = saved;
+    if (values.includes(saved)) select.value = saved;       // the user's own choice wins
+    else if (best) select.value = best;                     // otherwise the server's default (cell 7)
     row.hidden = values.length < 2;                  // nothing to choose with one model
     return values;
   }
@@ -170,6 +196,7 @@
                      leaf_healthy: "#7FD49A", leaf_bacterial_canker: "#B784F5", leaf_other: "#E0A35C" };
   const VERDICT_STYLE = {
     "Healthy": { badge: "✓", cls: "g-a" }, "Disease found": { badge: "✕", cls: "g-x" }, "Check by hand": { badge: "?", cls: "g-q" },
+    "Not a mango or leaf": { badge: "–", cls: "g-n" },
   };
   const d = {
     placeholder: $("dPlaceholder"), cam: $("dCam"), photo: $("dPhoto"), note: $("dNote"), busy: $("dBusy"),
@@ -177,7 +204,7 @@
     label: $("dLabel"), conf: $("dConf"), bars: $("dBars"), badge: $("gBadge"), title: $("gTitle"), advice: $("gAdvice"),
     camInput: $("dCamInput"), fileInput: $("dFileInput"),
     summary: $("dSummary"), items: $("dItems"), which: $("dWhich"),
-    modelSelect: $("dModelSelect"), modelRow: $("dModelRow"),
+    modelSelect: $("dModelSelect"), modelRow: $("dModelRow"), warn: $("dWarn"), feedback: $("dFeedback"),
   };
   d.modelSelect.addEventListener("change", () => {
     try { localStorage.setItem(D_MODEL_KEY, d.modelSelect.value); } catch (_) { /* ignore */ }
@@ -195,9 +222,12 @@
   }
 
   function renderDisease(g, cam) {
-    d.label.textContent = g.name;
-    d.label.style.color = D_COLORS[g.disease] || "var(--text)";
-    d.conf.textContent = Math.round(g.conf * 100) + "% confident";
+    const notIt = g.verdict === "Not a mango or leaf";  // idea 4: the server's sanity check said "neither"
+    d.label.textContent = notIt ? "Not a mango or leaf" : g.name;
+    d.label.style.color = notIt ? "var(--muted)" : (D_COLORS[g.disease] || "var(--text)");
+    d.conf.textContent = notIt ? "" : Math.round(g.conf * 100) + "% confident";
+    d.warn.textContent = g.warning || "";
+    d.warn.hidden = !g.warning;
     d.bars.innerHTML = "";
     for (const k of Object.keys(g.probs || {})) {
       const v = g.probs[k] || 0;
@@ -241,6 +271,7 @@
       [...d.items.children].forEach((b, j) => b.classList.toggle("on", j === i));
       renderDisease({ ...items[i], names: g.names, model: g.model, heatmap: g.heatmap }, picture);
       d.which.textContent = multi ? "Mango " + items[i].n + " of " + items.length : "Disease (our model)";
+      if (fbD) { fbD = { ...fbD, n: items[i].n || 1 }; renderFeedback(d.feedback, fbD); }
     };
     if (multi) items.forEach((it, i) => {
       const b = document.createElement("button");
@@ -265,6 +296,8 @@
     try { jpeg = await toJpeg(file); } catch (e) { dError(e.message || "Could not read this image."); return; }
     d.placeholder.hidden = true;
     d.photo.src = URL.createObjectURL(jpeg); d.photo.hidden = false;
+    lastDPhoto = d.photo.src;
+    fbD = null; renderFeedback(d.feedback, null);
     d.cam.hidden = true; d.note.hidden = true; d.toggle.hidden = true;
     d.resultCard.hidden = true; d.verdictCard.hidden = true;
     d.summary.hidden = true; d.items.hidden = true;
@@ -284,6 +317,8 @@
       const all = Array.isArray(g.items) && g.items.length ? g.items : [g];
       const t = Date.now();
       all.forEach((it) => addDiseaseScan({ ...it, model: g.model || currentDModel() }, t, all.length));
+      fbD = { t, n: g.n || 1, of: all.length, disease: true, names: g.names || {} };
+      renderFeedback(d.feedback, fbD);
       setPill("ok", "Model online · " + new URL(server).host);
     } catch (e) {
       const offline = e.name === "AbortError" || e instanceof TypeError;
@@ -365,6 +400,7 @@
 
   function renderResult(r, scroll = true, keepItems = false) {
     if (!keepItems) el.mItems.hidden = true;         // the per-mango chips belong to a several-mango result
+    fbR = null; renderFeedback(el.feedback, null);   // set again once this scan is saved (not in live mode)
     el.lowConf.textContent = LOW_ONE;
     if (el.aiDesc) el.aiDesc.hidden = true;          // an old description belongs to the previous photo
     if (el.gradeLink) el.gradeLink.hidden = true;
@@ -421,9 +457,11 @@
     const url = fileUrl(picture);                    // the photo with numbered boxes (none = whole photo was graded)
     if (url) { el.preview.src = url; el.preview.hidden = false; el.placeholder.hidden = true; }
     if (items.length === 1) { renderResult(itemToR(items[0])); return; }
+    fbR = null; renderFeedback(el.feedback, null);
     const show = (i) => {
       [...el.mItems.children].forEach((b, j) => b.classList.toggle("on", j === i));
       const it = items[i];
+      if (fbR) { fbR = { ...fbR, n: it.n }; renderFeedback(el.feedback, fbR); }
       el.bars.innerHTML = "";
       if (!(it.label in CLASS_INFO)) return;
       for (const name of Object.keys(CLASS_INFO)) {
@@ -502,6 +540,7 @@
       return;
     }
     el.preview.src = URL.createObjectURL(jpeg);
+    lastRPhoto = el.preview.src;
     el.preview.hidden = false;
     el.placeholder.hidden = true;
 
@@ -528,7 +567,11 @@
           setPill("ok", "Model online · " + new URL(server).host);
           try {
             renderMulti(res, out[1]);
-            addMultiScan(res);
+            const t = addMultiScan(res);
+            const on = el.mItems.querySelector(".m-item.on");     // the mango whose bars are shown
+            const idx = on ? [...el.mItems.children].indexOf(on) : 0;
+            fbR = { t, n: (res.items[idx] || res.items[0]).n || 1, of: res.items.length };
+            renderFeedback(el.feedback, fbR);
             if (res.items.length === 1) describe(res.items[0].label);   // a description only for a single mango
           } catch (uiErr) {
             showError("The model answered (" + res.summary + "), but the app could not show it: " + uiErr.message +
@@ -541,7 +584,8 @@
       setPill("ok", "Model online · " + new URL(server).host);
       try {                                          // a display problem must not look like "server offline"
         renderResult(r);
-        addScan(r);                                  // saved on this device for the Overview tab
+        fbR = { t: addScan(r), n: 1, of: 1 };        // saved on this device for the Overview tab
+        renderFeedback(el.feedback, fbR);
         const lbl = r.label in CLASS_INFO ? r.label : "not a mango";
         describe(lbl);                               // optional OpenAI text; not awaited (disease is a separate scan)
       } catch (uiErr) {
@@ -831,6 +875,7 @@
     const t = Date.now();
     s.push({ t, label: known ? r.label : "not a mango", conf: c ?? null, model: currentModel(), batch: currentBatch().id });
     saveScans(s);
+    return t;
   }
   function addMultiScan(res) {                       // one history row per mango found in the photo
     const s = loadScans();
@@ -841,6 +886,7 @@
                batch: currentBatch().id, n: it.n, of });
     }
     saveScans(s);
+    return t;
   }
   function addDiseaseScan(g, t = Date.now(), of = 1) {   // a separate disease scan (mango or leaf), one row per mango
     const s = loadScans();
@@ -858,7 +904,7 @@
     return h < 24 ? h + " h ago" : Math.round(h / 24) + " d ago";
   }
 
-  const VERDICT_COLORS = { "Healthy": "#5BC27A", "Disease found": "#FF8A6B", "Check by hand": "#C9D6CC" };
+  const VERDICT_COLORS = { "Healthy": "#5BC27A", "Disease found": "#FF8A6B", "Check by hand": "#B9C6BC", "Not a mango or leaf": "#8A8F8B" };
   let donutMode = "ripeness";
   function verdictBadge(v) {
     const st = VERDICT_STYLE[v];
@@ -889,10 +935,11 @@
     const b = currentBatch();
     const mine = loadScans().filter((x) => x.batch === b.id);
     if (!mine.length) return;
-    const head = ["batch", "time", "scan", "mango", "result", "confidence", "verdict", "model"];
+    const head = ["batch", "time", "scan", "mango", "result", "confidence", "verdict", "model", "user_check", "correct_label"];
     const rows = mine.map((x) => [b.id, new Date(x.t).toLocaleString(),
       isDisease(x) ? "disease (" + (x.part || "mango") + ")" : "ripeness", mangoOf(x), scanName(x),
-      x.conf != null ? x.conf.toFixed(3) : "", isDisease(x) ? x.verdict || "" : "", x.model || ""]);
+      x.conf != null ? x.conf.toFixed(3) : "", isDisease(x) ? x.verdict || "" : "", x.model || "",
+      x.fb || "", x.fb === "wrong" ? x.truth || "" : ""]);
     const csv = [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -917,24 +964,34 @@
 
     // donut: ripeness scans by result, or disease scans by verdict
     const colors = donutMode === "disease" ? VERDICT_COLORS : COLORS;
-    const pool = s.filter((x) => (donutMode === "disease") === isDisease(x));
+    const inScope = scope === "batch" ? s.filter((x) => x.batch === currentBatch().id) : s;
+    const pool = inScope.filter((x) => (donutMode === "disease") === isDisease(x));
     const keyOf = donutMode === "disease" ? (x) => x.verdict : (x) => x.label;
     const keys = Object.keys(colors);
     const counts = keys.map((k) => pool.filter((x) => keyOf(x) === k).length);
     const total = counts.reduce((a, b) => a + b, 0);
     const C = 2 * Math.PI * 60;
     let off = 0;
-    let svg = '<g transform="rotate(-90 75 75)" fill="none" stroke-width="16"><circle cx="75" cy="75" r="60" stroke="rgba(255,255,255,.08)"/>';
+    let svg = '<g transform="rotate(-90 75 75)" fill="none" stroke-width="16"><circle cx="75" cy="75" r="60" style="stroke:var(--fill-3)"/>';
     keys.forEach((k, i) => {
       if (!counts[i]) return;
       const len = counts[i] / total * C;
       svg += `<circle cx="75" cy="75" r="60" stroke="${colors[k]}" stroke-dasharray="${len.toFixed(1)} ${(C - len).toFixed(1)}" stroke-dashoffset="${(-off).toFixed(1)}"/>`;
       off += len;
     });
-    svg += `</g><text x="75" y="76" text-anchor="middle" fill="#EAF1EC" font-family="Space Grotesk, sans-serif" font-size="28" font-weight="700">${total}</text>`
-         + '<text x="75" y="96" text-anchor="middle" fill="#9FB3A5" font-family="Inter, sans-serif" font-size="11">scans</text>';
+    svg += `</g><text x="75" y="76" text-anchor="middle" style="fill:var(--text)" font-family="Space Grotesk, sans-serif" font-size="28" font-weight="700">${total}</text>`
+         + `<text x="75" y="96" text-anchor="middle" style="fill:var(--muted)" font-family="Inter, sans-serif" font-size="11">${donutMode === "disease" ? "checked" : "mangoes"}</text>`;
     $("donut").innerHTML = svg;
     $("donutLegend").innerHTML = keys.map((k, i) => `<li><i style="background:${colors[k]}"></i>${cap(k)} <b>${counts[i]}</b></li>`).join("");
+    // idea 5: one-line summary of the crate / batch, plus how many results the user confirmed
+    const b = currentBatch();
+    $("donutTitle").textContent = scope === "batch" ? "Batch " + b.id + " summary" : "All scans";
+    const parts = keys.map((k, i) => counts[i] ? counts[i] + " " + k.toLowerCase() : "").filter(Boolean);
+    const checked = pool.filter((x) => x.fb), right = checked.filter((x) => x.fb === "correct").length;
+    $("donutSummary").textContent = total
+      ? (donutMode === "disease" ? total + " checked: " : total + (total === 1 ? " mango: " : " mangoes: ")) + parts.join(" · ")
+        + (checked.length ? ` · you confirmed ${right} of ${checked.length} as right` : "")
+      : (scope === "batch" ? "No " + (donutMode === "disease" ? "disease" : "ripeness") + " scans in this batch yet." : "No scans yet.");
 
     // bars: scans per day, last 7 days
     const days = [];
@@ -966,6 +1023,17 @@
     $("segRipe").setAttribute("aria-pressed", String(m !== "disease"));
     renderOverview();
   }
+  let scope = "batch";                               // idea 5: donut for this batch (crate) or all scans
+  function setScope(v) {
+    scope = v;
+    $("scopeBatch").classList.toggle("on", v === "batch");
+    $("scopeAll").classList.toggle("on", v !== "batch");
+    $("scopeBatch").setAttribute("aria-pressed", String(v === "batch"));
+    $("scopeAll").setAttribute("aria-pressed", String(v !== "batch"));
+    renderOverview();
+  }
+  $("scopeBatch").addEventListener("click", () => setScope("batch"));
+  $("scopeAll").addEventListener("click", () => setScope("all"));
   $("segGrade").addEventListener("click", () => setDonutMode("disease"));
   $("segRipe").addEventListener("click", () => setDonutMode("ripeness"));
   $("reportBtn").addEventListener("click", downloadReport);
@@ -981,6 +1049,161 @@
   $("clearHistory").addEventListener("click", () => {
     if (confirm("Clear the scan history on this device?")) { saveScans([]); renderOverview(); }
   });
+
+  // ---------- idea 2: "Was this right?" (saved with the scan, exported in the CSV) ----------
+  const R_TRUTH = [["unripe", "Unripe"], ["ripe", "Ripe"], ["overripe", "Overripe"], ["not a mango", "Not a mango"]];
+  let fbR = null, fbD = null;                        // {t, n, of, disease, names} of the result on screen
+  const sameScan = (x, tg) => x.t === tg.t && (x.n || 1) === (tg.n || 1) && isDisease(x) === !!tg.disease;
+
+  function saveFeedback(tg, fb, truth) {
+    const s = loadScans();
+    const x = s.find((y) => sameScan(y, tg));
+    if (!x) return;
+    x.fb = fb;
+    if (fb === "wrong" && truth) x.truth = truth; else delete x.truth;
+    saveScans(s);
+  }
+
+  function renderFeedback(box, tg) {
+    if (!box) return;
+    if (!tg) { box.hidden = true; box.innerHTML = ""; return; }
+    const x = loadScans().find((y) => sameScan(y, tg));
+    if (!x) { box.hidden = true; return; }
+    const who = tg.of > 1 ? "mango " + tg.n : "this";
+    const opts = tg.disease
+      ? Object.entries(tg.names || {}).map(([k, v]) => [k, v]).concat([["not a mango or leaf", "Not a mango or leaf"]])
+      : R_TRUTH;
+    const btn = (attr, val, label, on) => `<button type="button" class="fb-btn${on ? " on" : ""}" ${attr}="${esc(val)}">${esc(label)}</button>`;
+    let html;
+    if (!x.fb) {
+      html = `<span class="fb-q">Was ${esc(who)} right?</span>` + btn("data-fb", "correct", "👍 Yes") + btn("data-fb", "wrong", "👎 No");
+    } else if (x.fb === "wrong" && !x.truth) {
+      html = `<span class="fb-q">What is it really?</span><span class="fb-opts">`
+        + opts.filter(([k]) => k !== (tg.disease ? x.label : x.label)).map(([k, v]) => btn("data-truth", k, v)).join("") + "</span>";
+    } else {
+      const truth = x.truth ? (opts.find(([k]) => k === x.truth) || [0, x.truth])[1] : "";
+      html = `<span class="fb-q">${x.fb === "correct" ? "✓ Saved: right" : "Saved: really " + esc(truth)}</span>`
+        + btn("data-fb", "undo", "Change");
+    }
+    box.innerHTML = html;
+    box.hidden = false;
+    box.querySelectorAll("[data-fb]").forEach((b) => b.addEventListener("click", () => {
+      const v = b.dataset.fb;
+      if (v === "undo") { const s = loadScans(); const y = s.find((z) => sameScan(z, tg)); if (y) { delete y.fb; delete y.truth; saveScans(s); } }
+      else saveFeedback(tg, v);
+      renderFeedback(box, tg);
+    }));
+    box.querySelectorAll("[data-truth]").forEach((b) => b.addEventListener("click", () => {
+      saveFeedback(tg, "wrong", b.dataset.truth);
+      renderFeedback(box, tg);
+    }));
+  }
+
+  // ---------- idea 3: share or save the result as a picture ----------
+  async function loadImg(src) {
+    if (!src) return null;
+    try {
+      const blob = src.startsWith("blob:") || src.startsWith("data:") ? await (await fetch(src)).blob()
+                                                                      : await (await timedFetch(src, {}, 20000)).blob();
+      return await createImageBitmap(blob);
+    } catch (_) { return null; }                       // e.g. the server link expired: fall back to our own photo
+  }
+
+  function wrapText(g, text, x, y, maxW, lineH, maxLines = 4) {
+    const words = String(text || "").split(/\s+/);
+    let line = "", n = 0;
+    for (const w of words) {
+      const test = line ? line + " " + w : w;
+      if (g.measureText(test).width > maxW && line) {
+        g.fillText(line, x, y); y += lineH; line = w;
+        if (++n >= maxLines - 1) { line = words.slice(words.indexOf(w)).join(" "); break; }
+      } else line = test;
+    }
+    if (line) { while (g.measureText(line).width > maxW && line.length > 3) line = line.slice(0, -4) + "…"; g.fillText(line, x, y); y += lineH; }
+    return y;
+  }
+
+  async function shareResult(kind) {
+    const W = 1080, H = 1350, c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const g = c.getContext("2d");
+    g.fillStyle = "#FFF8E7"; g.fillRect(0, 0, W, H);
+    g.fillStyle = "#F5A623"; g.fillRect(0, 0, W, 120);
+    g.fillStyle = "#2A1A00"; g.font = "700 48px 'Space Grotesk', sans-serif";
+    g.fillText("Mango Grader", 56, 78);
+    g.font = "500 28px Inter, sans-serif";
+    g.textAlign = "right";
+    g.fillText(kind === "disease" ? "Disease scan" : "Ripeness scan", W - 56, 76);
+    g.textAlign = "left";
+    // the picture on screen (heat map or numbered boxes when shown), else our own photo
+    const imgEl = kind === "disease" ? (!d.cam.hidden ? d.cam : d.photo) : el.preview;
+    const bmp = (await loadImg(imgEl && imgEl.src)) || (await loadImg(kind === "disease" ? lastDPhoto : lastRPhoto));
+    const box = { x: 56, y: 160, w: W - 112, h: 660 };
+    g.fillStyle = "#EFE4C8"; g.fillRect(box.x, box.y, box.w, box.h);
+    if (bmp) {
+      const s = Math.min(box.w / bmp.width, box.h / bmp.height);
+      const w = bmp.width * s, h = bmp.height * s;
+      g.drawImage(bmp, box.x + (box.w - w) / 2, box.y + (box.h - h) / 2, w, h);
+    }
+    let y = box.y + box.h + 80;
+    const big = kind === "disease" ? (d.summary.hidden ? d.label.textContent : d.summary.textContent) : el.verdictLabel.textContent;
+    const conf = kind === "disease" ? (d.summary.hidden ? d.conf.textContent : "") : el.verdictConf.textContent;
+    g.fillStyle = "#1F2A22"; g.font = "700 64px 'Space Grotesk', sans-serif";
+    y = wrapText(g, cap(big || ""), 56, y, W - 112, 72, 2);
+    if (conf) { g.fillStyle = "#5B6A5F"; g.font = "600 34px Inter, sans-serif"; g.fillText(conf, 56, y); y += 56; }
+    g.font = "500 32px Inter, sans-serif"; g.fillStyle = "#3E4C42";
+    const chips = [...(kind === "disease" ? d.items : el.mItems).querySelectorAll(".m-item")];
+    const multi = !(kind === "disease" ? d.items : el.mItems).hidden && chips.length > 1;
+    if (multi) {                                     // several mangoes: one line each
+      g.font = "600 32px Inter, sans-serif";
+      chips.slice(0, 6).forEach((b) => {
+        const num = b.querySelector(".m-num");
+        g.fillStyle = num.style.background && !num.style.background.startsWith("var") ? num.style.background : "#9A5800";
+        g.beginPath(); g.arc(76, y - 11, 20, 0, 7); g.fill();
+        g.fillStyle = "#FFFFFF"; g.textAlign = "center"; g.fillText(num.textContent, 76, y);
+        g.textAlign = "left"; g.fillStyle = "#1F2A22";
+        const badge = b.querySelector(".mini-badge");
+        g.fillText([b.querySelector(".m-name").textContent, b.querySelector(".m-val").textContent,
+                    badge ? "· " + badge.title : ""].filter(Boolean).join("  "), 112, y);
+        y += 50;
+      });
+      if (chips.length > 6) { g.fillText("… and " + (chips.length - 6) + " more", 112, y); y += 50; }
+    } else if (kind === "disease") {
+      if (!d.verdictCard.hidden && d.title.textContent) {
+        g.font = "700 36px Inter, sans-serif"; g.fillStyle = "#1F2A22";
+        g.fillText("Verdict: " + d.title.textContent, 56, y); y += 50;
+        g.font = "500 30px Inter, sans-serif"; g.fillStyle = "#3E4C42";
+        y = wrapText(g, d.advice.textContent, 56, y, W - 112, 42, 3);
+      }
+    } else {
+      y = wrapText(g, el.verdictText.textContent, 56, y, W - 112, 42, 3);
+    }
+    g.font = "500 24px Inter, sans-serif"; g.fillStyle = "#6B7A6F";
+    const model = kind === "disease" ? (currentDModel() ? "Model: " + currentDModel() : "") : el.modelUsed.textContent;
+    g.fillText([new Date().toLocaleString(), model].filter(Boolean).join(" · "), 56, H - 84);
+    g.fillText("From our own student model · not an official grade", 56, H - 46);
+    const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    const now = new Date(), p2 = (v) => String(v).padStart(2, "0");
+    const stamp = `${now.getFullYear()}-${p2(now.getMonth() + 1)}-${p2(now.getDate())}-${p2(now.getHours())}${p2(now.getMinutes())}`;
+    const file = new File([blob], `mango-${kind}-${stamp}.png`, { type: "image/png" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "Mango Grader result" });
+        return;
+      }
+    } catch (e) { if (e && e.name === "AbortError") return; }   // the user closed the share sheet
+    const url = URL.createObjectURL(file);
+    const a = document.createElement("a");
+    a.href = url; a.download = file.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+  let lastRPhoto = "", lastDPhoto = "";
+  $("rShare").addEventListener("click", () => shareResult("ripeness"));
+  $("dShare").addEventListener("click", () => shareResult("disease"));
+
+  // ---------- idea 1: photo tips are open until the first scan, then closed (tap to open) ----------
+  if (!loadScans().length) { $("rTips").open = true; $("dTips").open = true; }
 
   // ---------- tabs: Overview · Ripeness · Disease · Insights (sidebar on laptop, bottom bar on phone) ----------
   const TABS = ["overview", "ripeness", "disease", "insights"];
