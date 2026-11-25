@@ -121,8 +121,8 @@
               <div id="stage" class="stage">
                 <div id="placeholder" class="placeholder">
                   <img src="icons/icon.svg" alt="" width="64" height="64">
-                  <p><strong>One mango per photo</strong></p>
-                  <p class="muted">Take a photo, upload one, or drop / paste an image here.</p>
+                  <p><strong>One mango or several</strong></p>
+                  <p class="muted">Each mango is found and graded. Take a photo, upload one, or drop / paste an image here.</p>
                 </div>
                 <video id="video" playsinline muted hidden></video>
                 <img id="preview" alt="Selected mango photo" hidden>
@@ -160,6 +160,7 @@
                 <p id="verdictText" class="muted"></p>
                 <p id="modelUsed" class="muted small-text" hidden></p>
                 <p id="lowConf" class="warn" hidden>Low confidence. Check the photo: one mango, good light, mango fills most of the frame.</p>
+                <div id="mItems" class="m-items" hidden></div>
                 <div id="bars" class="bars"></div>
                 <div id="aiDesc" class="ai-desc" hidden>
                   <span class="ai-tag">AI description · OpenAI (the grade above is from our own model)</span>
@@ -170,7 +171,7 @@
               <section class="card notes">
                 <h3>Good to know</h3>
                 <ul>
-                  <li>Made for the <strong>long yellow mango</strong>, one mango per photo.</li>
+                  <li>Made for the <strong>long yellow mango</strong>. Several mangoes in one photo? Our detector finds each one, and each gets its own grade (numbered boxes). Live mode grades the whole frame.</li>
                   <li>Photos that don't look like a mango should be answered with "Not a mango". Look-alike fruit can still pass.</li>
                   <li>Disease is a separate scan (mango or leaf) in the <strong>Disease</strong> tab.</li>
                   <li>Prediction runs on the project's model server, so an internet connection is needed.</li>
@@ -188,11 +189,16 @@
           </div>
           <div class="scan-layout">
             <section class="card scan">
-              <div class="card-head"><h2 class="title">Disease scan</h2><button id="dToggle" class="chip chip-btn" type="button" hidden>Show photo</button></div>
+              <div class="card-head"><h2 class="title">Disease scan</h2>
+                <label id="dModelRow" class="model-row" for="dModelSelect" hidden>
+                  <span>Model</span>
+                  <select id="dModelSelect"></select>
+                </label>
+                <button id="dToggle" class="chip chip-btn" type="button" hidden>Show photo</button></div>
               <div class="stage disease-stage">
                 <div id="dPlaceholder" class="placeholder">
                   <img src="icons/icon.svg" alt="" width="64" height="64">
-                  <p><strong>One mango or one mango leaf per photo</strong></p>
+                  <p><strong>Mangoes (each one is checked) or one mango leaf</strong></p>
                   <p class="muted">Take a photo or upload one. This scan is separate from ripeness.</p>
                 </div>
                 <img id="dCam" alt="Grad-CAM heat map over the photo" hidden>
@@ -216,7 +222,9 @@
             </section>
             <aside class="scan-side">
               <section id="dResultCard" class="card" hidden aria-live="polite">
-                <p class="eyebrow">Disease (our model)</p>
+                <p id="dSummary" class="d-summary" hidden></p>
+                <div id="dItems" class="m-items" hidden></div>
+                <p id="dWhich" class="eyebrow">Disease (our model)</p>
                 <div class="verdict"><span id="dLabel" class="verdict-label d-label"></span><span id="dConf" class="verdict-conf"></span></div>
                 <div id="dBars" class="bars d-bars"></div>
               </section>
@@ -231,7 +239,9 @@
                 <h3>Good to know</h3>
                 <ul>
                   <li><strong>Mango:</strong> healthy, anthracnose, stem-end rot (black tip once our own photos are added).</li>
-                  <li><strong>Leaf:</strong> healthy, <strong>bacterial canker</strong>, or another leaf disease.</li>
+                  <li><strong>Leaf:</strong> healthy, <strong>bacterial canker</strong>, or another leaf disease. Photograph a leaf on its own: when mangoes are in the photo, only the mangoes are checked.</li>
+                  <li>Several mangoes? Each gets its own disease result and heat map; tap a number to see its details.</li>
+                  <li>Three disease models are compared on the same photos. Heat maps come from MobileNetV2 and EfficientNetV2-B0; YOLO26n-cls shows no heat map.</li>
                   <li>Verdict = our team's rule: disease ≥ 50% → Disease found; healthy ≥ 60% → Healthy; otherwise Check by hand. Not an official standard.</li>
                   <li>Ripeness is a separate scan in the <strong>Ripeness</strong> tab.</li>
                 </ul>
@@ -270,6 +280,16 @@
               <div class="bar-row"><span class="name">Leaf: other</span><div class="bar-track"><div class="bar-fill" style="width:97.4%;background:#8a7a3a"></div></div><span class="val">0.974</span></div>
             </div>
             <p class="muted small-text">Main error: 17 of 208 anthracnose mangoes called healthy (early, small spots). Mango and leaf photos are almost never mixed up (1 of 833). Hardest real-world source: Roboflow photos from other farms, 78.6%. Leaf scores may be optimistic: test leaves come from the same two datasets as the training leaves.</p>
+          </section>
+          <section class="card">
+            <div class="card-head"><h3>Disease model comparison · macro-F1</h3><span class="chip">Same 833 test photos</span></div>
+            <div class="bars">
+              <div class="bar-row"><span class="name" style="text-transform:none">MobileNetV2 v3</span><div class="bar-track"><div class="bar-fill" style="width:95.7%;background:#b5a27a"></div></div><span class="val">0.957</span></div>
+              <div class="bar-row"><span class="name" style="text-transform:none">MobileNetV2 v4</span><div class="bar-track"><div class="bar-fill" style="width:94.9%;background:#b5a27a"></div></div><span class="val">0.949</span></div>
+              <div class="bar-row"><span class="name" style="text-transform:none">EffNetV2-B0 v4</span><div class="bar-track"><div class="bar-fill" style="width:96.1%;background:#e0a030"></div></div><span class="val">0.961</span></div>
+              <div class="bar-row"><span class="name" style="text-transform:none">YOLO26n-cls</span><div class="bar-track"><div class="bar-fill" style="width:98%;background:#3f9b57"></div></div><span class="val">0.980</span></div>
+            </div>
+            <p class="muted small-text">YOLO26n-cls: highest score (accuracy 97.6%), smallest (3 MB) and fastest, but no heat map; its lead over EfficientNetV2-B0 is within the 95% interval. Own photos: 17–18 of 19 for every model. Position test (stem-end rot moved to the top edge, still found): v3 53%, MobileNetV2 v4 72%, EfficientNetV2-B0 v4 98%, YOLO 51%. v4 = trained with any rotation and position. Pick the model in the Disease tab.</p>
           </section>
           <div class="grid2">
             <section class="card">

@@ -23,8 +23,11 @@
     settingsMsg: $("settingsMsg"), phoneBox: $("phoneBox"), qr: $("qr"), phoneLink: $("phoneLink"),
     installBtn: $("installBtn"), canvas: $("canvas"),
     liveBtn: $("liveBtn"), liveTag: $("liveTag"), liveText: $("liveText"),
-    modelRow: $("modelRow"), modelSelect: $("modelSelect"), modelUsed: $("modelUsed"),
+    modelRow: $("modelRow"), modelSelect: $("modelSelect"), modelUsed: $("modelUsed"), mItems: $("mItems"),
   };
+  const LOW_ONE = el.lowConf.textContent;
+  const LOW_MANY = "Low confidence on at least one mango. Check that mango in good light, close up.";
+  const fileUrl = (f) => (f && (f.url || (f.path ? server + "/gradio_api/file=" + f.path : ""))) || "";
 
   // ---------- model server (the Gradio app from notebook cell J) ----------
   let server = "";
@@ -82,26 +85,36 @@
   const MODEL_KEY = "mango.model";
   let modelChoices = [];          // values the server accepts, e.g. ["MobileNetV2", "EfficientNetV2-B0", "YOLO26n-cls"]
 
-  function setupModels(cfg) {
-    const comp = cfg && Array.isArray(cfg.components)
-      ? cfg.components.find((c) => c.type === "dropdown") : null;
+  // fills a <select> from a Gradio dropdown; returns the accepted values
+  function fillSelect(comp, select, row, key) {
     const raw = comp && comp.props && Array.isArray(comp.props.choices) ? comp.props.choices : [];
     // Gradio lists choices as ["Label", "value"] pairs (newer) or plain strings (older)
     const choices = raw.map((ch) => Array.isArray(ch) ? { label: String(ch[0]), value: String(ch[1] ?? ch[0]) }
                                                       : { label: String(ch), value: String(ch) });
-    modelChoices = choices.map((c) => c.value);
-    el.modelSelect.innerHTML = "";
+    select.innerHTML = "";
     for (const c of choices) {
       const o = document.createElement("option");
       o.value = c.value;
       o.textContent = c.label;
-      el.modelSelect.appendChild(o);
+      select.appendChild(o);
     }
+    const values = choices.map((c) => c.value);
     let saved = "";
-    try { saved = localStorage.getItem(MODEL_KEY) || ""; } catch (_) { /* ignore */ }
-    if (modelChoices.includes(saved)) el.modelSelect.value = saved;
-    el.modelRow.hidden = modelChoices.length === 0;
+    try { saved = localStorage.getItem(key) || ""; } catch (_) { /* ignore */ }
+    if (values.includes(saved)) select.value = saved;
+    row.hidden = values.length < 2;                  // nothing to choose with one model
+    return values;
   }
+
+  function setupModels(cfg) {
+    const drops = cfg && Array.isArray(cfg.components) ? cfg.components.filter((c) => c.type === "dropdown") : [];
+    const isDis = (c) => c.props && c.props.label === "Disease model";
+    modelChoices = fillSelect(drops.find((c) => !isDis(c)), el.modelSelect, el.modelRow, MODEL_KEY);
+    el.modelRow.hidden = modelChoices.length === 0;  // ripeness: always show which model answered
+    dModelChoices = fillSelect(drops.find(isDis), d.modelSelect, d.modelRow, D_MODEL_KEY);
+  }
+  const D_MODEL_KEY = "mango.dmodel";
+  let dModelChoices = [];
 
   el.modelSelect.addEventListener("change", () => {
     try { localStorage.setItem(MODEL_KEY, el.modelSelect.value); } catch (_) { /* ignore */ }
@@ -163,7 +176,13 @@
     toggle: $("dToggle"), error: $("dError"), resultCard: $("dResultCard"), verdictCard: $("dVerdictCard"),
     label: $("dLabel"), conf: $("dConf"), bars: $("dBars"), badge: $("gBadge"), title: $("gTitle"), advice: $("gAdvice"),
     camInput: $("dCamInput"), fileInput: $("dFileInput"),
+    summary: $("dSummary"), items: $("dItems"), which: $("dWhich"),
+    modelSelect: $("dModelSelect"), modelRow: $("dModelRow"),
   };
+  d.modelSelect.addEventListener("change", () => {
+    try { localStorage.setItem(D_MODEL_KEY, d.modelSelect.value); } catch (_) { /* ignore */ }
+  });
+  const currentDModel = () => (dModelChoices.length ? d.modelSelect.value : "");
 
   function dError(msg) { if (d.error) { d.error.textContent = msg; d.error.hidden = !msg; } }
 
@@ -197,13 +216,45 @@
     d.badge.className = "grade-badge " + st.cls;
     d.title.textContent = g.verdict || "";
     d.advice.textContent = g.advice || "";
-    const camUrl = cam && (cam.url || (cam.path ? server + "/gradio_api/file=" + cam.path : ""));
+    const camUrl = fileUrl(cam);
     if (camUrl) {
+      d.note.textContent = g.heatmap === false ? "Numbered boxes · " + (g.model || "this model") + " has no heat map"
+                                               : "Red = where the disease model looked most";
       d.cam.src = camUrl; d.cam.hidden = false; d.photo.hidden = true; d.note.hidden = false;
       d.toggle.hidden = false; d.toggle.textContent = "Show photo";
     }
     d.resultCard.hidden = false;
     d.verdictCard.hidden = false;
+  }
+
+  // Several mangoes (detector on the server): one numbered chip per mango; the worst one is shown first.
+  function renderDiseaseAll(g, cam) {
+    const items = Array.isArray(g.items) && g.items.length ? g.items : [g];
+    const multi = items.length > 1;
+    let pick = items.findIndex((it) => it.n === g.n);
+    if (pick < 0) pick = 0;
+    d.summary.hidden = !multi;
+    d.summary.textContent = multi ? (g.summary || items.length + " mangoes") : "";
+    d.items.hidden = !multi;
+    d.items.innerHTML = "";
+    const show = (i, picture) => {
+      [...d.items.children].forEach((b, j) => b.classList.toggle("on", j === i));
+      renderDisease({ ...items[i], names: g.names, model: g.model, heatmap: g.heatmap }, picture);
+      d.which.textContent = multi ? "Mango " + items[i].n + " of " + items.length : "Disease (our model)";
+    };
+    if (multi) items.forEach((it, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "m-item";
+      b.innerHTML = '<b class="m-num"></b><span class="m-name"></span><span class="m-val"></span>' + verdictBadge(it.verdict);
+      b.querySelector(".m-num").textContent = it.n;
+      b.querySelector(".m-num").style.background = VERDICT_COLORS[it.verdict] || "var(--muted)";
+      b.querySelector(".m-name").textContent = it.name;
+      b.querySelector(".m-val").textContent = Math.round(it.conf * 100) + "%";
+      b.addEventListener("click", () => show(i, null));
+      d.items.appendChild(b);
+    });
+    show(pick, cam);
   }
 
   async function scanDisease(file) {
@@ -216,18 +267,23 @@
     d.photo.src = URL.createObjectURL(jpeg); d.photo.hidden = false;
     d.cam.hidden = true; d.note.hidden = true; d.toggle.hidden = true;
     d.resultCard.hidden = true; d.verdictCard.hidden = true;
+    d.summary.hidden = true; d.items.hidden = true;
     d.busy.hidden = false;
     try {
       const path = await uploadBlob(jpeg);
-      const out = await gradioCall("disease_scan", [{ path, meta: { _type: "gradio.FileData" } }], 90000);
+      const file = { path, meta: { _type: "gradio.FileData" } };
+      let out = dModelChoices.length ? await gradioCall("disease_scan", [file, currentDModel()], 90000) : null;
+      if (!out) out = await gradioCall("disease_scan", [file], 90000);   // older server: one disease model, photo only
       const g = out && out[0];
       if (!g || g.available === false) {
         dError("The model server has no disease scan yet. In Colab: train the disease model (mango_disease.ipynb, D3), "
                + "run the newest cell 7 of mango_models_compare.ipynb, and paste the new link in Settings.");
         return;
       }
-      renderDisease(g, out[1]);
-      addDiseaseScan(g);
+      renderDiseaseAll(g, out[1]);
+      const all = Array.isArray(g.items) && g.items.length ? g.items : [g];
+      const t = Date.now();
+      all.forEach((it) => addDiseaseScan({ ...it, model: g.model || currentDModel() }, t, all.length));
       setPill("ok", "Model online · " + new URL(server).host);
     } catch (e) {
       const offline = e.name === "AbortError" || e instanceof TypeError;
@@ -307,7 +363,9 @@
     showError("");
   }
 
-  function renderResult(r, scroll = true) {
+  function renderResult(r, scroll = true, keepItems = false) {
+    if (!keepItems) el.mItems.hidden = true;         // the per-mango chips belong to a several-mango result
+    el.lowConf.textContent = LOW_ONE;
     if (el.aiDesc) el.aiDesc.hidden = true;          // an old description belongs to the previous photo
     if (el.gradeLink) el.gradeLink.hidden = true;
     el.modelUsed.textContent = currentModel() ? "Model: " + currentModel() : "";
@@ -352,6 +410,62 @@
     }
     el.resultCard.hidden = false;
     if (scroll) el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // ---------- several mangoes in one photo (cell 7 "ripeness_scan": detector + one grade per mango) ----------
+  const itemToR = (it) => ({ label: it.label,
+    confidences: Object.entries(it.probs || {}).map(([label, confidence]) => ({ label, confidence })) });
+
+  function renderMulti(res, picture) {
+    const items = res.items;
+    const url = fileUrl(picture);                    // the photo with numbered boxes (none = whole photo was graded)
+    if (url) { el.preview.src = url; el.preview.hidden = false; el.placeholder.hidden = true; }
+    if (items.length === 1) { renderResult(itemToR(items[0])); return; }
+    const show = (i) => {
+      [...el.mItems.children].forEach((b, j) => b.classList.toggle("on", j === i));
+      const it = items[i];
+      el.bars.innerHTML = "";
+      if (!(it.label in CLASS_INFO)) return;
+      for (const name of Object.keys(CLASS_INFO)) {
+        const v = (it.probs || {})[name] ?? 0;
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        row.innerHTML = '<span class="name"></span><div class="bar-track"><div class="bar-fill"></div></div><span class="val"></span>';
+        row.querySelector(".name").textContent = name;
+        row.querySelector(".val").textContent = (v * 100).toFixed(1) + "%";
+        const fill = row.querySelector(".bar-fill");
+        fill.style.background = CLASS_INFO[name].color;
+        el.bars.appendChild(row);
+        requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = (v * 100).toFixed(1) + "%"; }));
+      }
+    };
+    if (el.aiDesc) el.aiDesc.hidden = true;
+    el.modelUsed.textContent = currentModel() ? "Model: " + currentModel() : "";
+    el.modelUsed.hidden = !currentModel();
+    el.verdictLabel.textContent = res.count ? res.count + (res.count === 1 ? " mango" : " mangoes") : "No mango found";
+    el.verdictLabel.style.color = "var(--text)";
+    el.verdictLabel.style.textTransform = "none";
+    el.verdictConf.textContent = "";
+    el.verdictText.textContent = (res.summary || "").replace(/^\d+ mangoes?: /, "") + ". Tap a number to see that mango’s bars.";
+    el.lowConf.textContent = LOW_MANY;
+    el.lowConf.hidden = !items.some((it) => it.label in CLASS_INFO && it.conf < LOW_CONF);
+    el.mItems.innerHTML = "";
+    items.forEach((it, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "m-item";
+      b.innerHTML = '<b class="m-num"></b><span class="m-name"></span><span class="m-val"></span>';
+      b.querySelector(".m-num").textContent = it.n;
+      b.querySelector(".m-num").style.background = COLORS[it.label] || "var(--muted)";
+      b.querySelector(".m-name").textContent = cap(it.label);
+      b.querySelector(".m-val").textContent = it.label in CLASS_INFO ? Math.round(it.conf * 100) + "%" : "";
+      b.addEventListener("click", () => show(i));
+      el.mItems.appendChild(b);
+    });
+    el.mItems.hidden = false;
+    show(0);
+    el.resultCard.hidden = false;
+    el.resultCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   // ---------- images ----------
@@ -405,6 +519,24 @@
     el.busy.hidden = false;
     el.cameraBtn.disabled = true;
     try {
+      if (modelChoices.length) {                     // the comparison server (cell 7) can find and grade EVERY mango
+        const path = await uploadBlob(jpeg);
+        lastUploadPath = path;
+        const out = await gradioCall("ripeness_scan", [{ path, meta: { _type: "gradio.FileData" } }, currentModel()], 90000);
+        const res = out && out[0];
+        if (res && Array.isArray(res.items) && res.items.length) {
+          setPill("ok", "Model online · " + new URL(server).host);
+          try {
+            renderMulti(res, out[1]);
+            addMultiScan(res);
+            if (res.items.length === 1) describe(res.items[0].label);   // a description only for a single mango
+          } catch (uiErr) {
+            showError("The model answered (" + res.summary + "), but the app could not show it: " + uiErr.message +
+                      ". Reload the page; if it stays, upload ALL files from mango-pwa.zip again.");
+          }
+          return;
+        }                                            // older server without "ripeness_scan": one answer per photo
+      }
       const r = await predict(jpeg);
       setPill("ok", "Model online · " + new URL(server).host);
       try {                                          // a display problem must not look like "server offline"
@@ -700,12 +832,23 @@
     s.push({ t, label: known ? r.label : "not a mango", conf: c ?? null, model: currentModel(), batch: currentBatch().id });
     saveScans(s);
   }
-  function addDiseaseScan(g) {                       // a separate disease scan (mango or leaf)
+  function addMultiScan(res) {                       // one history row per mango found in the photo
     const s = loadScans();
-    s.push({ t: Date.now(), type: "disease", label: g.disease, name: g.name, part: g.part || "mango",
-             conf: g.conf, verdict: g.verdict, batch: currentBatch().id });
+    const t = Date.now(), of = res.items.length;
+    for (const it of res.items) {
+      const known = it.label in CLASS_INFO;
+      s.push({ t, label: known ? it.label : "not a mango", conf: known ? it.conf : null, model: currentModel(),
+               batch: currentBatch().id, n: it.n, of });
+    }
     saveScans(s);
   }
+  function addDiseaseScan(g, t = Date.now(), of = 1) {   // a separate disease scan (mango or leaf), one row per mango
+    const s = loadScans();
+    s.push({ t, type: "disease", label: g.disease, name: g.name, part: g.part || "mango",
+             conf: g.conf, verdict: g.verdict, batch: currentBatch().id, n: g.n, of, model: g.model || "" });
+    saveScans(s);
+  }
+  const mangoOf = (x) => (x.of > 1 ? "mango " + x.n + " of " + x.of : "");
   const isDisease = (x) => x.type === "disease";
   function ago(t) {
     const m = Math.round((Date.now() - t) / 60000);
@@ -746,9 +889,9 @@
     const b = currentBatch();
     const mine = loadScans().filter((x) => x.batch === b.id);
     if (!mine.length) return;
-    const head = ["batch", "time", "scan", "result", "confidence", "verdict", "model"];
+    const head = ["batch", "time", "scan", "mango", "result", "confidence", "verdict", "model"];
     const rows = mine.map((x) => [b.id, new Date(x.t).toLocaleString(),
-      isDisease(x) ? "disease (" + (x.part || "mango") + ")" : "ripeness", scanName(x),
+      isDisease(x) ? "disease (" + (x.part || "mango") + ")" : "ripeness", mangoOf(x), scanName(x),
       x.conf != null ? x.conf.toFixed(3) : "", isDisease(x) ? x.verdict || "" : "", x.model || ""]);
     const csv = [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
@@ -811,7 +954,7 @@
     const rec = s.slice(-5).reverse();
     $("recentList").innerHTML = rec.length
       ? rec.map((x) => `<li><span class="rec-main">${isDisease(x) ? verdictBadge(x.verdict) : ""}<span style="color:${scanColor(x)}">${esc(scanName(x))}</span></span><span class="meta">`
-          + `${x.conf != null ? Math.round(x.conf * 100) + "% · " : ""}${x.model ? esc(x.model) + " · " : ""}${ago(x.t)}</span></li>`).join("")
+          + `${mangoOf(x) ? esc(mangoOf(x)) + " · " : ""}${x.conf != null ? Math.round(x.conf * 100) + "% · " : ""}${x.model ? esc(x.model) + " · " : ""}${ago(x.t)}</span></li>`).join("")
       : '<li><span class="muted">No scans yet</span></li>';
   }
 
