@@ -252,16 +252,28 @@
             <section class="card kpi"><span class="big">15,111</span><span class="muted small-text">Mango images in the dataset</span></section>
             <section class="card kpi"><span class="big">4,934</span><span class="muted small-text">Photos hand-labeled by the team</span></section>
           </div>
-          <p class="eyebrow">Disease model (MobileNetV2, 4 classes)</p>
+          <p class="eyebrow">Disease model v3 (MobileNetV2 · 3 mango + 3 leaf classes)</p>
           <div class="grid4">
-            <section class="card kpi"><span class="big accent">96.4%</span><span class="muted small-text">Test accuracy (441 photos)</span></section>
-            <section class="card kpi"><span class="big">0.963</span><span class="muted small-text">Macro-F1 (95% CI 0.946–0.980)</span></section>
-            <section class="card kpi"><span class="big">8 / 118</span><span class="muted small-text">Main error: black spot called anthracnose</span></section>
-            <section class="card kpi"><span class="big">2</span><span class="muted small-text">Public datasets (CC BY 4.0), Indian varieties</span></section>
+            <section class="card kpi"><span class="big accent">95.2%</span><span class="muted small-text">Test accuracy (833 photos, mango + leaf)</span></section>
+            <section class="card kpi"><span class="big">0.957</span><span class="muted small-text">Macro-F1 (95% CI 0.944–0.969)</span></section>
+            <section class="card kpi"><span class="big">0.974</span><span class="muted small-text">F1 for leaf bacterial canker (130 of 135 found)</span></section>
+            <section class="card kpi"><span class="big">17 / 19</span><span class="muted small-text">Our own mango photos correct (never trained on; small sample)</span></section>
           </div>
+          <section class="card">
+            <div class="card-head"><h3>Disease F1-score per class</h3><span class="chip">Mango 93.5% · Leaf 97.7%</span></div>
+            <div class="bars">
+              <div class="bar-row"><span class="name">Healthy</span><div class="bar-track"><div class="bar-fill" style="width:91.6%;background:#3f9b57"></div></div><span class="val">0.916</span></div>
+              <div class="bar-row"><span class="name">Anthracnose</span><div class="bar-track"><div class="bar-fill" style="width:92.3%;background:#b5651d"></div></div><span class="val">0.923</span></div>
+              <div class="bar-row"><span class="name">Stem-end rot</span><div class="bar-track"><div class="bar-fill" style="width:97.8%;background:#7a4b2a"></div></div><span class="val">0.978</span></div>
+              <div class="bar-row"><span class="name">Leaf: healthy</span><div class="bar-track"><div class="bar-fill" style="width:97.8%;background:#3f9b57"></div></div><span class="val">0.978</span></div>
+              <div class="bar-row"><span class="name">Leaf: canker</span><div class="bar-track"><div class="bar-fill" style="width:97.4%;background:#d9534f"></div></div><span class="val">0.974</span></div>
+              <div class="bar-row"><span class="name">Leaf: other</span><div class="bar-track"><div class="bar-fill" style="width:97.4%;background:#8a7a3a"></div></div><span class="val">0.974</span></div>
+            </div>
+            <p class="muted small-text">Main error: 17 of 208 anthracnose mangoes called healthy (early, small spots). Mango and leaf photos are almost never mixed up (1 of 833). Hardest real-world source: Roboflow photos from other farms, 78.6%. Leaf scores may be optimistic: test leaves come from the same two datasets as the training leaves.</p>
+          </section>
           <div class="grid2">
             <section class="card">
-              <div class="card-head"><h3>Confusion matrix · test set</h3><span class="chip">MobileNetV2 v1</span></div>
+              <div class="card-head"><h3>Ripeness confusion matrix · test set</h3><span class="chip">MobileNetV2 v1</span></div>
               <div class="cm">
                 <span></span><span class="cm-h">Pred. unripe</span><span class="cm-h">Pred. ripe</span><span class="cm-h">Pred. overripe</span>
                 <span class="cm-r">Unripe</span><span class="cell good-u">1,137</span><span class="cell">28</span><span class="cell dim">0</span>
@@ -271,7 +283,7 @@
               <p class="muted small-text">Rows = true class, columns = prediction. Main error: 91 of 594 ripe mangoes predicted unripe.</p>
             </section>
             <section class="card">
-              <h3>F1-score per class</h3>
+              <h3>Ripeness F1-score per class</h3>
               <div class="bars">
                 <div class="bar-row"><span class="name">Unripe</span><div class="bar-track"><div class="bar-fill" style="width:95%;background:var(--unripe)"></div></div><span class="val">0.950</span></div>
                 <div class="bar-row"><span class="name">Ripe</span><div class="bar-track"><div class="bar-fill" style="width:85.8%;background:var(--ripe)"></div></div><span class="val">0.858</span></div>
@@ -294,7 +306,7 @@
             </div>
             <p class="muted small-text">The 95% intervals overlap, so no model is clearly more accurate; YOLO26n-cls is the smallest and fastest. The "not a mango" test images are easy (backgrounds and white-background fruit photos), so real-world photos may score lower. Speed = time per image including file loading, one image at a time.</p>
           </section>
-          <p class="credits">Data: Roboflow “mango-fruit-ripeness” (school-vakkx, CC BY 4.0) and “dataset-s2doa” (emm-tnn, Public Domain). Non-mango fruit: Fruits-360 (Mihai Oltean, CC BY-SA 4.0).</p>
+          <p class="credits">Data: Roboflow “mango-fruit-ripeness” (school-vakkx, CC BY 4.0) and “dataset-s2doa” (emm-tnn, Public Domain). Non-mango fruit: Fruits-360 (Mihai Oltean, CC BY-SA 4.0). Disease: MangoDHDS (Barhate et al. 2025) and Amrapali Mango Fruit Diseases (Alam et al. 2026), Roboflow “cause-of-damage-on-mango-3” (gianni) and “mango-diseases” (gpl-zbkdb), all CC BY 4.0. Leaves: MLD24 (Shakib et al. 2024) and MLDID (Rahman et al. 2024), CC BY 4.0. Plus our own photos.</p>
         </section>
       </main>
     </div>
