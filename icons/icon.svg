@@ -1,13 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Mango Grader</title>
   <defs>
-    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
-      <stop offset="0" stop-color="#E07A10"/>
-      <stop offset="0.55" stop-color="#F5A623"/>
-      <stop offset="1" stop-color="#FFD54A"/>
-    </linearGradient>
+    <radialGradient id="hot" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#d7191c" stop-opacity=".95"/>
+      <stop offset=".45" stop-color="#fdae61" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#fdae61" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="fruit"><path d="M262 104C334 108 356 192 352 262C348 344 316 424 244 430C190 434 162 396 166 348C170 298 192 266 196 214C200 154 214 102 262 104Z"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="112" fill="#FFF1CC"/>
-  <path d="M150 380 C 100 280, 160 140, 290 115 C 385 98, 430 175, 402 258 C 375 345, 250 450, 150 380 Z" fill="url(#g)"/>
-  <path d="M296 118 C 318 74, 370 58, 414 72 C 388 114, 344 130, 296 118 Z" fill="#4C9A2A"/>
-  <ellipse cx="225" cy="220" rx="40" ry="20" fill="#FFFFFF" opacity="0.35" transform="rotate(-40 225 220)"/>
+  <rect width="512" height="512" rx="112" fill="#FFF8E7"/>
+  
+  <g transform="rotate(-32 256 268)">
+    <path d="M262 104C334 108 356 192 352 262C348 344 316 424 244 430C190 434 162 396 166 348C170 298 192 266 196 214C200 154 214 102 262 104Z" fill="#F5A623"/>
+    <g clip-path="url(#fruit)"><circle cx="292" cy="300" r="105" fill="url(#hot)"/></g>
+    <path d="M262 108c10-32 38-54 76-56-6 36-32 58-76 56z" fill="#3f9b57"/>  </g>
+  <g stroke="#2B2113" stroke-width="22" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M84 150V84h66"/><path d="M362 84h66v66"/><path d="M428 362v66h-66"/><path d="M150 428H84v-66"/>
+  </g>
+  
 </svg>

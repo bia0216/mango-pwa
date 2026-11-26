@@ -1,5 +1,5 @@
 // Network-first service worker: always tries the latest files, falls back to the cache when offline.
-const CACHE = "mango-pwa-v17";
+const CACHE = "mango-pwa-v18";
 const ASSETS = [
   "./",
   "index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "icons/icon.svg",
   "icons/icon-192.png",
   "icons/icon-512.png",
+  "icons/icon-maskable-512.png",
 ];
 
 self.addEventListener("install", (e) => {
