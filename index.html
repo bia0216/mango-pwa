@@ -306,23 +306,55 @@
         <section class="view" data-view="insights" aria-label="Insights">
           <div class="view-head">
             <p class="eyebrow">Insights</p>
-            <h2>How well the model grades</h2>
+            <h2>How well the models grade</h2>
           </div>
+
+          <p class="eyebrow">Ripeness</p>
           <div class="grid4">
-            <section class="card kpi"><span class="big accent">91.7%</span><span class="muted small-text">Test accuracy (1,782 of 1,943)</span></section>
-            <section class="card kpi"><span class="big">0.898</span><span class="muted small-text">Macro-F1 (3 classes)</span></section>
-            <section class="card kpi"><span class="big">15,111</span><span class="muted small-text">Mango images in the dataset</span></section>
-            <section class="card kpi"><span class="big">4,934</span><span class="muted small-text">Photos hand-labeled by the team</span></section>
+            <section class="card kpi"><span class="big accent">91.7%</span><span class="muted small-text">Test accuracy</span></section>
+            <section class="card kpi"><span class="big">0.898</span><span class="muted small-text">Macro-F1</span></section>
+            <section class="card kpi"><span class="big">15,111</span><span class="muted small-text">Mango images</span></section>
+            <section class="card kpi"><span class="big">4,934</span><span class="muted small-text">Labeled by us</span></section>
           </div>
-          <p class="eyebrow">Disease model v3 (MobileNetV2 · 3 mango + 3 leaf classes)</p>
-          <div class="grid4">
-            <section class="card kpi"><span class="big accent">95.2%</span><span class="muted small-text">Test accuracy (833 photos, mango + leaf)</span></section>
-            <section class="card kpi"><span class="big">0.957</span><span class="muted small-text">Macro-F1 (95% CI 0.944–0.969)</span></section>
-            <section class="card kpi"><span class="big">0.974</span><span class="muted small-text">F1 for leaf bacterial canker (130 of 135 found)</span></section>
-            <section class="card kpi"><span class="big">17 / 19</span><span class="muted small-text">Our own mango photos correct (never trained on; small sample)</span></section>
+          <div class="grid2">
+            <section class="card">
+              <h3>F1-score per class</h3>
+              <div class="bars">
+                <div class="bar-row"><span class="name">Unripe</span><div class="bar-track"><div class="bar-fill" style="width:95%;background:var(--unripe)"></div></div><span class="val">0.950</span></div>
+                <div class="bar-row"><span class="name">Ripe</span><div class="bar-track"><div class="bar-fill" style="width:85.8%;background:var(--ripe)"></div></div><span class="val">0.858</span></div>
+                <div class="bar-row"><span class="name">Overripe</span><div class="bar-track"><div class="bar-fill" style="width:88.6%;background:var(--overripe)"></div></div><span class="val">0.886</span></div>
+              </div>
+            </section>
+            <section class="card">
+              <h3>Confusion matrix</h3>
+              <div class="cm">
+                <span></span><span class="cm-h">Pred. unripe</span><span class="cm-h">Pred. ripe</span><span class="cm-h">Pred. overripe</span>
+                <span class="cm-r">Unripe</span><span class="cell good-u">1,137</span><span class="cell">28</span><span class="cell dim">0</span>
+                <span class="cm-r">Ripe</span><span class="cell bad">91</span><span class="cell good-r">482</span><span class="cell">21</span>
+                <span class="cm-r">Overripe</span><span class="cell dim">1</span><span class="cell">20</span><span class="cell good-o">163</span>
+              </div>
+              <p class="muted small-text">Main error: ripe called unripe (91 of 594).</p>
+            </section>
           </div>
           <section class="card">
-            <div class="card-head"><h3>Disease F1-score per class</h3><span class="chip">Mango 93.5% · Leaf 97.7%</span></div>
+            <div class="card-head"><h3>Model comparison · macro-F1</h3><span class="chip">incl. "not a mango"</span></div>
+            <div class="bars">
+              <div class="bar-row"><span class="name" style="text-transform:none">MobileNetV2</span><div class="bar-track"><div class="bar-fill" style="width:93.4%;background:#b5a27a"></div></div><span class="val">0.934</span></div>
+              <div class="bar-row"><span class="name" style="text-transform:none">EffNetV2-B0</span><div class="bar-track"><div class="bar-fill" style="width:92.6%;background:#e0a030"></div></div><span class="val">0.926</span></div>
+              <div class="bar-row"><span class="name" style="text-transform:none">YOLO26n-cls</span><div class="bar-track"><div class="bar-fill" style="width:93.8%;background:#3f9b57"></div></div><span class="val">0.938</span></div>
+            </div>
+            <p class="muted small-text">No clear winner (the 95% intervals overlap).</p>
+          </section>
+
+          <p class="eyebrow">Disease (mango and leaf)</p>
+          <div class="grid4">
+            <section class="card kpi"><span class="big accent">95.2%</span><span class="muted small-text">Test accuracy</span></section>
+            <section class="card kpi"><span class="big">0.957</span><span class="muted small-text">Macro-F1</span></section>
+            <section class="card kpi"><span class="big">0.974</span><span class="muted small-text">Leaf canker F1</span></section>
+            <section class="card kpi"><span class="big">17 / 19</span><span class="muted small-text">Our own photos</span></section>
+          </div>
+          <section class="card">
+            <div class="card-head"><h3>F1-score per class</h3><span class="chip">Mango 93.5% · Leaf 97.7%</span></div>
             <div class="bars">
               <div class="bar-row"><span class="name">Healthy</span><div class="bar-track"><div class="bar-fill" style="width:91.6%;background:#3f9b57"></div></div><span class="val">0.916</span></div>
               <div class="bar-row"><span class="name">Anthracnose</span><div class="bar-track"><div class="bar-fill" style="width:92.3%;background:#b5651d"></div></div><span class="val">0.923</span></div>
@@ -331,54 +363,22 @@
               <div class="bar-row"><span class="name">Leaf: canker</span><div class="bar-track"><div class="bar-fill" style="width:97.4%;background:#d9534f"></div></div><span class="val">0.974</span></div>
               <div class="bar-row"><span class="name">Leaf: other</span><div class="bar-track"><div class="bar-fill" style="width:97.4%;background:#8a7a3a"></div></div><span class="val">0.974</span></div>
             </div>
-            <p class="muted small-text">Main error: 17 of 208 anthracnose mangoes called healthy (early, small spots). Mango and leaf photos are almost never mixed up (1 of 833). Hardest real-world source: Roboflow photos from other farms, 78.6%. Leaf scores may be optimistic: test leaves come from the same two datasets as the training leaves.</p>
+            <p class="muted small-text">Main error: anthracnose called healthy (17 of 208).</p>
           </section>
           <section class="card">
-            <div class="card-head"><h3>Disease model comparison · macro-F1</h3><span class="chip">Same 833 test photos</span></div>
+            <div class="card-head"><h3>Model comparison · macro-F1</h3><span class="chip">Same 833 photos</span></div>
             <div class="bars">
-              <div class="bar-row"><span class="name" style="text-transform:none">MobileNetV2 v3</span><div class="bar-track"><div class="bar-fill" style="width:95.7%;background:#b5a27a"></div></div><span class="val">0.957</span></div>
               <div class="bar-row"><span class="name" style="text-transform:none">MobileNetV2 v4</span><div class="bar-track"><div class="bar-fill" style="width:94.9%;background:#b5a27a"></div></div><span class="val">0.949</span></div>
               <div class="bar-row"><span class="name" style="text-transform:none">EffNetV2-B0 v4</span><div class="bar-track"><div class="bar-fill" style="width:96.1%;background:#e0a030"></div></div><span class="val">0.961</span></div>
               <div class="bar-row"><span class="name" style="text-transform:none">YOLO26n-cls</span><div class="bar-track"><div class="bar-fill" style="width:98%;background:#3f9b57"></div></div><span class="val">0.980</span></div>
             </div>
-            <p class="muted small-text">YOLO26n-cls: highest score (accuracy 97.6%), smallest (3 MB) and fastest, but no heat map; its lead over EfficientNetV2-B0 is within the 95% interval. Own photos: 17–18 of 19 for every model. Position test (stem-end rot moved to the top edge, still found): v3 53%, MobileNetV2 v4 72%, EfficientNetV2-B0 v4 98%, YOLO 51%. v4 = trained with any rotation and position. Pick the model in the Disease tab.</p>
+            <p class="muted small-text">YOLO scores highest; EfficientNet v4 still finds stem-end rot at the edge (98%) and has a heat map.</p>
           </section>
-          <div class="grid2">
-            <section class="card">
-              <div class="card-head"><h3>Ripeness confusion matrix · test set</h3><span class="chip">MobileNetV2 v1</span></div>
-              <div class="cm">
-                <span></span><span class="cm-h">Pred. unripe</span><span class="cm-h">Pred. ripe</span><span class="cm-h">Pred. overripe</span>
-                <span class="cm-r">Unripe</span><span class="cell good-u">1,137</span><span class="cell">28</span><span class="cell dim">0</span>
-                <span class="cm-r">Ripe</span><span class="cell bad">91</span><span class="cell good-r">482</span><span class="cell">21</span>
-                <span class="cm-r">Overripe</span><span class="cell dim">1</span><span class="cell">20</span><span class="cell good-o">163</span>
-              </div>
-              <p class="muted small-text">Rows = true class, columns = prediction. Main error: 91 of 594 ripe mangoes predicted unripe.</p>
-            </section>
-            <section class="card">
-              <h3>Ripeness F1-score per class</h3>
-              <div class="bars">
-                <div class="bar-row"><span class="name">Unripe</span><div class="bar-track"><div class="bar-fill" style="width:95%;background:var(--unripe)"></div></div><span class="val">0.950</span></div>
-                <div class="bar-row"><span class="name">Ripe</span><div class="bar-track"><div class="bar-fill" style="width:85.8%;background:var(--ripe)"></div></div><span class="val">0.858</span></div>
-                <div class="bar-row"><span class="name">Overripe</span><div class="bar-track"><div class="bar-fill" style="width:88.6%;background:var(--overripe)"></div></div><span class="val">0.886</span></div>
-              </div>
-              <p class="muted small-text">Verified by re-running the saved model on the test images listed in our data manifest.</p>
-            </section>
-          </div>
-          <section class="card">
-            <div class="card-head"><h3>Model comparison · 4 classes incl. "not a mango"</h3><span class="chip">Same data · 2,807 test images</span></div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Model</th><th>Macro-F1 (95% interval)</th><th>Mango-only F1</th><th>Not-a-mango F1</th><th>Size</th><th>Speed (T4)</th></tr></thead>
-                <tbody>
-                  <tr><td><b>MobileNetV2</b><br><span class="muted small-text">TensorFlow / Keras</span></td><td>0.934 (0.921–0.946)</td><td>0.913</td><td>0.997</td><td>21.9 MB</td><td>174 ms</td></tr>
-                  <tr><td><b>EfficientNetV2-B0</b><br><span class="muted small-text">TensorFlow / Keras</span></td><td>0.926 (0.912–0.939)</td><td>0.902</td><td>0.996</td><td>34.0 MB</td><td>387 ms</td></tr>
-                  <tr><td><b>YOLO26n-cls</b><br><span class="muted small-text">Ultralytics / PyTorch</span></td><td>0.938 (0.925–0.950)</td><td>0.918</td><td>0.998</td><td>3.2 MB</td><td>10 ms</td></tr>
-                </tbody>
-              </table>
-            </div>
-            <p class="muted small-text">The 95% intervals overlap, so no model is clearly more accurate; YOLO26n-cls is the smallest and fastest. The "not a mango" test images are easy (backgrounds and white-background fruit photos), so real-world photos may score lower. Speed = time per image including file loading, one image at a time.</p>
-          </section>
-          <p class="credits">Data: Roboflow “mango-fruit-ripeness” (school-vakkx, CC BY 4.0) and “dataset-s2doa” (emm-tnn, Public Domain). Non-mango fruit: Fruits-360 (Mihai Oltean, CC BY-SA 4.0). Disease: MangoDHDS (Barhate et al. 2025) and Amrapali Mango Fruit Diseases (Alam et al. 2026), Roboflow “cause-of-damage-on-mango-3” (gianni) and “mango-diseases” (gpl-zbkdb), all CC BY 4.0. Leaves: MLD24 (Shakib et al. 2024) and MLDID (Rahman et al. 2024), CC BY 4.0. Plus our own photos.</p>
+
+          <details class="tips">
+            <summary>Data sources</summary>
+            <p class="credits">Roboflow “mango-fruit-ripeness” (school-vakkx, CC BY 4.0) and “dataset-s2doa” (emm-tnn, Public Domain). Non-mango fruit: Fruits-360 (Mihai Oltean, CC BY-SA 4.0). Disease: MangoDHDS (Barhate et al. 2025), Amrapali Mango Fruit Diseases (Alam et al. 2026), Roboflow “cause-of-damage-on-mango-3” (gianni) and “mango-diseases” (gpl-zbkdb), CC BY 4.0. Leaves: MLD24 (Shakib et al. 2024), MLDID (Rahman et al. 2024), CC BY 4.0. Plus our own photos.</p>
+          </details>
         </section>
       </main>
     </div>
