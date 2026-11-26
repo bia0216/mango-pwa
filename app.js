@@ -144,7 +144,11 @@
 
   el.modelSelect.addEventListener("change", () => {
     try { localStorage.setItem(MODEL_KEY, el.modelSelect.value); } catch (_) { /* ignore */ }
-    el.resultCard.hidden = true;     // an old result belongs to the previous model
+    // re-check the last photo with the newly chosen model (live mode simply uses the new model for the next frame)
+    if (lastRBlob && !stream) {
+      el.preview.src = lastRPhoto; el.preview.hidden = false; el.placeholder.hidden = true;
+      analyse(lastRBlob);
+    } else el.resultCard.hidden = true;     // no photo yet: an old result belongs to the previous model
   });
 
   function currentModel() { return modelChoices.length ? el.modelSelect.value : ""; }
@@ -208,6 +212,7 @@
   };
   d.modelSelect.addEventListener("change", () => {
     try { localStorage.setItem(D_MODEL_KEY, d.modelSelect.value); } catch (_) { /* ignore */ }
+    if (lastDBlob && !dStream) scanDisease(lastDBlob);   // re-check the last photo with the newly chosen model
   });
   const currentDModel = () => (dModelChoices.length ? d.modelSelect.value : "");
 
@@ -228,8 +233,9 @@
     d.conf.textContent = notIt ? "" : Math.round(g.conf * 100) + "% confident";
     d.warn.textContent = g.warning || "";
     d.warn.hidden = !g.warning;
-    d.bars.innerHTML = "";
-    for (const k of Object.keys(g.probs || {})) {
+    // not a mango or leaf: no disease bars (they would be a guess about something that is not a mango)
+    d.bars.innerHTML = notIt ? '<p class="muted small-text">No disease result: our models say this photo shows neither a mango nor a mango leaf.</p>' : "";
+    for (const k of (notIt ? [] : Object.keys(g.probs || {}))) {
       const v = g.probs[k] || 0;
       const row = document.createElement("div");
       row.className = "bar-row";
@@ -247,7 +253,9 @@
     d.title.textContent = g.verdict || "";
     d.advice.textContent = g.advice || "";
     const camUrl = fileUrl(cam);
-    if (camUrl) {
+    if (camUrl && notIt) {                           // no heat map either: show the plain photo
+      d.cam.hidden = true; d.photo.hidden = false; d.note.hidden = true; d.toggle.hidden = true;
+    } else if (camUrl) {
       d.note.textContent = g.heatmap === false ? "Numbered boxes · " + (g.model || "this model") + " has no heat map"
                                                : "Red = where the disease model looked most";
       d.cam.src = camUrl; d.cam.hidden = false; d.photo.hidden = true; d.note.hidden = false;
@@ -288,7 +296,18 @@
     show(pick, cam);
   }
 
+  // one disease scan at a time; a model change (or new photo) during a scan runs right after it
+  let lastDBlob = null, busyD = false, queuedD = null;
   async function scanDisease(file) {
+    if (busyD) { queuedD = file; return; }
+    busyD = true;
+    try {
+      await scanDiseaseOnce(file);
+      while (queuedD) { const f = queuedD; queuedD = null; await scanDiseaseOnce(f); }
+    } finally { busyD = false; }
+  }
+
+  async function scanDiseaseOnce(file) {
     if (!file) return;
     dError("");
     if (!server) { openSettings("Add the model server link first, then scan again."); return; }
@@ -297,6 +316,7 @@
     d.placeholder.hidden = true;
     d.photo.src = URL.createObjectURL(jpeg); d.photo.hidden = false;
     lastDPhoto = d.photo.src;
+    lastDBlob = jpeg;                                // kept, so a model change can re-check this photo
     fbD = null; renderFeedback(d.feedback, null);
     d.cam.hidden = true; d.note.hidden = true; d.toggle.hidden = true;
     d.resultCard.hidden = true; d.verdictCard.hidden = true;
@@ -458,8 +478,9 @@
     el.lowConf.textContent = LOW_ONE;
     if (el.aiDesc) el.aiDesc.hidden = true;          // an old description belongs to the previous photo
     if (el.gradeLink) el.gradeLink.hidden = true;
-    el.modelUsed.textContent = currentModel() ? "Model: " + currentModel() : "";
-    el.modelUsed.hidden = !currentModel();
+    const mName = (r && r.model) || currentModel();   // the model that made THIS result
+    el.modelUsed.textContent = mName ? "Model: " + mName : "";
+    el.modelUsed.hidden = !mName;
     if (!(r.label in CLASS_INFO)) {                // "not a mango", or any answer that is not a ripeness class
       el.verdictLabel.textContent = "Not a mango";
       el.verdictLabel.style.color = "var(--danger)";
@@ -510,7 +531,7 @@
     const items = res.items;
     const url = fileUrl(picture);                    // the photo with numbered boxes (none = whole photo was graded)
     if (url) { el.preview.src = url; el.preview.hidden = false; el.placeholder.hidden = true; }
-    if (items.length === 1) { renderResult(itemToR(items[0])); return; }
+    if (items.length === 1) { renderResult({ ...itemToR(items[0]), model: res.model }); return; }
     fbR = null; renderFeedback(el.feedback, null);
     const show = (i) => {
       [...el.mItems.children].forEach((b, j) => b.classList.toggle("on", j === i));
@@ -532,8 +553,9 @@
       }
     };
     if (el.aiDesc) el.aiDesc.hidden = true;
-    el.modelUsed.textContent = currentModel() ? "Model: " + currentModel() : "";
-    el.modelUsed.hidden = !currentModel();
+    const mName = res.model || currentModel();         // the model that made THIS result
+    el.modelUsed.textContent = mName ? "Model: " + mName : "";
+    el.modelUsed.hidden = !mName;
     el.verdictLabel.textContent = res.count ? res.count + (res.count === 1 ? " mango" : " mangoes") : "No mango found";
     el.verdictLabel.style.color = "var(--text)";
     el.verdictLabel.style.textTransform = "none";
@@ -595,6 +617,7 @@
     }
     el.preview.src = URL.createObjectURL(jpeg);
     lastRPhoto = el.preview.src;
+    lastRBlob = jpeg;                                // kept, so a model change can re-check this photo
     el.preview.hidden = false;
     el.placeholder.hidden = true;
 
@@ -608,7 +631,22 @@
 
   let pendingBlob = null;
 
+  // one ripeness scan at a time; a model change (or new photo) during a scan runs right after it
+  let lastRBlob = null, busyR = false, queuedR = null;
   async function analyse(jpeg) {
+    if (busyR) { queuedR = jpeg; return; }
+    busyR = true;
+    try {
+      await analyseOnce(jpeg);
+      while (queuedR) {
+        const j = queuedR; queuedR = null;
+        if (j === lastRBlob) { el.preview.src = lastRPhoto; }
+        await analyseOnce(j);
+      }
+    } finally { busyR = false; }
+  }
+
+  async function analyseOnce(jpeg) {
     el.busy.hidden = false;
     el.cameraBtn.disabled = true;
     try {
@@ -936,7 +974,7 @@
     const t = Date.now(), of = res.items.length;
     for (const it of res.items) {
       const known = it.label in CLASS_INFO;
-      s.push({ t, label: known ? it.label : "not a mango", conf: known ? it.conf : null, model: currentModel(),
+      s.push({ t, label: known ? it.label : "not a mango", conf: known ? it.conf : null, model: res.model || currentModel(),
                batch: currentBatch().id, n: it.n, of });
     }
     saveScans(s);
